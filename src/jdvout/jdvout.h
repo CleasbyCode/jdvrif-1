@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 #include <iterator>
-#include <zlib.h>
+#include <C:\Users\Nick\source\zlib-1.3.1\zlib.h>
 
 #include "getByteValue.cpp"
 #include "searchFunc.cpp"
@@ -28,4 +28,4 @@ const uint32_t inflateFile(std::vector<uint8_t>&);
 
 void displayInfo();
 
-uint8_t jdvOut(const std::string&);	
+int jdvOut(const std::string&);	

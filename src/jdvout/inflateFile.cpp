@@ -1,7 +1,7 @@
 // zlib function, see https://zlib.net/
 const uint32_t inflateFile(std::vector<uint8_t>& Vec) {
 
-	constexpr uint32_t BUFSIZE = 2097152;
+	constexpr uint32_t BUFSIZE = 2 * 1024 * 1024; // 2MB.
 
 	uint8_t* buffer{ new uint8_t[BUFSIZE] };
 	
@@ -36,6 +36,7 @@ const uint32_t inflateFile(std::vector<uint8_t>& Vec) {
 	
 	delete[] buffer;
 	Vec = std::move(Inflate_Vec);	
+	std::vector<uint8_t>().swap(Inflate_Vec);
 
 	return(static_cast<uint32_t>(Vec.size()));
 }
