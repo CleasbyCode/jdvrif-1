@@ -1,8 +1,8 @@
-uint8_t jdvIn(const std::string& IMAGE_FILENAME, std::string& data_filename, bool isRedditOption, bool isCompressedFile) {
+int jdvIn(const std::string& IMAGE_FILENAME, std::string& data_filename, bool isRedditOption, bool isCompressedFile) {
 	
-	constexpr uint32_t
-		COMBINED_MAX_FILE_SIZE 		= 2147483648, 	// 2GB. (image + data file)
-		COMBINED_MAX_FILE_SIZE_REDDIT 	= 20971520;	// 20MB. ""	
+	constexpr uint32_t 
+		COMBINED_MAX_FILE_SIZE 	 	= 2U * 1024U * 1024U * 1024U,  	// 2GB. (image + data file)
+		COMBINED_MAX_FILE_SIZE_REDDIT 	= 20 * 1024 * 1024;	   	// 20MB. ""	
 
 	const size_t 
 		IMAGE_FILE_SIZE 	= std::filesystem::file_size(IMAGE_FILENAME),
@@ -31,9 +31,9 @@ uint8_t jdvIn(const std::string& IMAGE_FILENAME, std::string& data_filename, boo
 	}
 
 	std::vector<uint8_t> Image_Vec;
-	Image_Vec.reserve(COMBINED_FILE_SIZE); 
+	Image_Vec.resize(IMAGE_FILE_SIZE); 
 	
-	std::copy(std::istreambuf_iterator<char>(image_file_ifs), std::istreambuf_iterator<char>(), std::back_inserter(Image_Vec));
+	image_file_ifs.read(reinterpret_cast<char*>(Image_Vec.data()), IMAGE_FILE_SIZE);
 
 	constexpr uint8_t
 		SOI_SIG[]	{ 0xFF, 0xD8 },
@@ -52,12 +52,8 @@ uint8_t jdvIn(const std::string& IMAGE_FILENAME, std::string& data_filename, boo
 		Profile_Vec = std::move(Profile_Kdak_Vec);
 	}
 
-	const uint8_t LAST_SLASH_POS = static_cast<uint8_t>(data_filename.find_last_of("\\/"));
-
-	if (LAST_SLASH_POS <= data_filename.length()) {
-		const std::string_view NO_SLASH_NAME(data_filename.c_str() + (LAST_SLASH_POS + 1), data_filename.length() - (LAST_SLASH_POS + 1));
-		data_filename = NO_SLASH_NAME;
-	}
+	std::filesystem::path filePath(data_filename);
+    	data_filename = filePath.filename().string();
 
 	constexpr uint8_t DATA_FILENAME_MAX_LENGTH = 20;
 
@@ -72,17 +68,17 @@ uint8_t jdvIn(const std::string& IMAGE_FILENAME, std::string& data_filename, boo
 
 	Profile_Vec[DATA_FILENAME_LENGTH_INDEX] = DATA_FILENAME_LENGTH;
 
-	constexpr uint32_t LARGE_FILE_SIZE = 104857600;	// 100MB.
+	constexpr uint32_t LARGE_FILE_SIZE = 400 * 1024 * 1024;  // 400MB.
 
 	if (DATA_FILE_SIZE > LARGE_FILE_SIZE) {
 		std::cout << "\nPlease wait. Larger files will take longer to complete this process.\n";
 	}
 
 	std::vector<uint8_t> File_Vec;
-	File_Vec.reserve(COMBINED_FILE_SIZE); 
+	File_Vec.resize(DATA_FILE_SIZE); 
 
-	std::copy(std::istreambuf_iterator<char>(data_file_ifs), std::istreambuf_iterator<char>(), std::back_inserter(File_Vec));
-	
+	data_file_ifs.read(reinterpret_cast<char*>(File_Vec.data()), DATA_FILE_SIZE);
+
 	std::reverse(File_Vec.begin(), File_Vec.end());
 	
 	uint32_t file_vec_size = deflateFile(File_Vec, isCompressedFile);
@@ -100,6 +96,8 @@ uint8_t jdvIn(const std::string& IMAGE_FILENAME, std::string& data_filename, boo
 
 	constexpr uint8_t PROFILE_HEADER_LENGTH = 18;
 	
+	Image_Vec.reserve(IMAGE_FILE_SIZE + File_Vec.size());	
+
 	if (isRedditOption) {
 		Image_Vec.insert(Image_Vec.begin(), std::begin(SOI_SIG), std::end(SOI_SIG));
 		Image_Vec.insert(Image_Vec.end() - 2, File_Vec.begin() + PROFILE_HEADER_LENGTH, File_Vec.end());
