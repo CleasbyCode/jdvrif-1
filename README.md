@@ -10,8 +10,8 @@ Compatible hosting sites, ***listed below***, have their own ***much smaller*** 
 
 ***jdvrif*** partly derives from the ***[technique demonstrated](https://www.vice.com/en/article/bj4wxm/tiny-picture-twitter-complete-works-of-shakespeare-steganography)*** by security researcher ***[David Buchanan](https://www.da.vidbuchanan.co.uk/).*** 
 
-![Demo Image](https://github.com/CleasbyCode/jdvrif-1/blob/main/demo_image/jrif_72607.jpg)  
-***Image credit:*** [***@DontSmileAI***](https://x.com/DontSmileAI) / ***PIN: 3495979549***
+![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_94141.jpg)  
+***Image credit:*** [***@rdc768***](https://x.com/rdc768) / ***PIN: 1603147522***
 
 Your embedded file is ***compressed*** (depending on file type) and ***encrypted*** with ***PIN*** protection.  
 The data file, if required, is split into multiple [***64KB ICC Profile segments***](https://youtu.be/qduwJjtT-tY) within the ***JPG*** cover image.  
@@ -75,11 +75,9 @@ For example, a **50KB** workflow.json file compressed down to **6KB**, making it
 Also with [***Mastodon***](https://youtu.be/rnLf3W60IKQ), the size limit is measured by the ***data file size*** and not the combined image size.  
 For example, if your cover image is **1MB** you can still embed a data file up to the **~6MB** size limit.
 
-You can try ***jdvrif*** from [***this site***](https://cleasbycode.co.uk/jdvrif/index/) if you don't want to download and compile the source code.  
+You can try [***jdvrif Web App***](https://cleasbycode.co.uk/jdvrif/index/) if you don't want to download and compile the source code.  
 
-***Note: While the Web App will compress & encrypt the hidden file, it's less secure than the command-line version as it does not currently support PIN protection. Images created by the jdvrif command-line program with PIN protection are not currently compatible with the Web App version.***
-
-https://github.com/user-attachments/assets/778a6c98-eea6-40e2-82bf-0ee94cad6c8b
+https://github.com/user-attachments/assets/f51b2c89-23cb-423b-8d35-aa2300003f2e
 
 * **ImgPile -** *You must sign in to an account before sharing your data-embedded JPG image on ImgPile*.  
 *Sharing your image without logging in, your embedded data will not be preserved.*
