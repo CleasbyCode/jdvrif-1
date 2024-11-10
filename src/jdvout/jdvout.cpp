@@ -19,7 +19,8 @@ int jdvOut(const std::string& IMAGE_FILENAME) {
 	Image_Vec.resize(IMAGE_FILE_SIZE);
 
 	image_file_ifs.read(reinterpret_cast<char*>(Image_Vec.data()), IMAGE_FILE_SIZE);
-	
+	image_file_ifs.close();
+
 	constexpr uint8_t
 		JDV_SIG[]	{ 0xB4, 0x6A, 0x3E, 0xEA, 0x5E, 0x9D, 0xF9 },
 		PROFILE_SIG[] 	{ 0x6D, 0x6E, 0x74, 0x72, 0x52, 0x47, 0x42 },
@@ -34,6 +35,8 @@ int jdvOut(const std::string& IMAGE_FILENAME) {
 		return 1;
 	}
 	
+	uint8_t extract_success_byte_val = Image_Vec[JDV_SIG_INDEX + INDEX_DIFF - 1];
+
 	// Remove JPG header and the APP2 ICC Profile/segment header,
 	// also, any other segments that could be added by hosting sites (e.g. Mastodon), such as EXIF. 
 	// Vector now contains color profile data, encrypted/compressed data file and cover image data.
@@ -49,12 +52,44 @@ int jdvOut(const std::string& IMAGE_FILENAME) {
 	const std::string DECRYPTED_FILENAME = decryptFile(Image_Vec, Decrypted_File_Vec);	
 	
 	const uint32_t INFLATED_FILE_SIZE = inflateFile(Decrypted_File_Vec);
-	
-	if (Decrypted_File_Vec.empty()) {
+
+	if (Decrypted_File_Vec.empty()) {	
+		std::fstream file(IMAGE_FILENAME, std::ios::in | std::ios::out | std::ios::binary);
+		std::streampos failure_index = JDV_SIG_INDEX + INDEX_DIFF - 1;
+
+		file.seekg(failure_index);
+
+		uint8_t byte;
+		file.read(reinterpret_cast<char*>(&byte), sizeof(byte));
+
+		byte = byte == 0x90 ? 0 : ++byte;
+		
+		if (byte > 3) {
+			file.close();
+			std::ofstream file(IMAGE_FILENAME, std::ios::out | std::ios::trunc | std::ios::binary);
+		} else {
+			file.seekp(failure_index);
+			file.write(reinterpret_cast<char*>(&byte), sizeof(byte));
+		}
+
+		file.close();
+
 		std::cerr << "\nFile Error: Invalid recovery PIN or file is corrupt.\n\n";
 		return 1;
 	}
+
+	if (extract_success_byte_val != 0x90) {
+		std::fstream file(IMAGE_FILENAME, std::ios::in | std::ios::out | std::ios::binary);
+		std::streampos success_index = JDV_SIG_INDEX + INDEX_DIFF - 1;
 	
+		uint8_t byte = 0x90;
+
+		file.seekp(success_index);
+		file.write(reinterpret_cast<char*>(&byte), sizeof(byte));
+
+		file.close();
+	}
+
 	std::reverse(Decrypted_File_Vec.begin(), Decrypted_File_Vec.end());
 
 	std::ofstream file_ofs(DECRYPTED_FILENAME, std::ios::binary);

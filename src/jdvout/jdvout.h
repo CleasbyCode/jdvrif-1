@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 #include <iterator>
-#include <zlib.h>
+#include <C:\Users\Nick\source\zlib-1.3.1\zlib.h>
 
 #ifdef _WIN32
 #include <conio.h>
