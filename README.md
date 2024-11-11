@@ -2,6 +2,8 @@
 
 Use CLI tools ***jdvin*** & ***jdvout*** with a JPG image, to embed or extract any file, up to **2GB** (cover image + data file).  
 
+Note: ***jdvrif v2.1*** (current version) is no longer compatible with previous versions.
+
 Compatible hosting sites, ***listed below***, have their own ***much smaller*** image size limits:
 * ***Flickr*** (**200MB**), ***ImgPile*** (**100MB**), ***ImgBB*** (**32MB**), ***PostImage*** (**32MB**), ***Reddit*** (**20MB** / ***-r option***),
 * Limit measured by data file size: ***Mastodon*** (**~6MB**), ***Tumblr*** (**~64KB**), ***Twitter*** (**~10KB**).
@@ -10,8 +12,8 @@ Compatible hosting sites, ***listed below***, have their own ***much smaller*** 
 
 ***jdvrif*** partly derives from the ***[technique demonstrated](https://www.vice.com/en/article/bj4wxm/tiny-picture-twitter-complete-works-of-shakespeare-steganography)*** by security researcher ***[David Buchanan](https://www.da.vidbuchanan.co.uk/).*** 
 
-![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_94141.jpg)  
-***Image credit:*** [***@rdc768***](https://x.com/rdc768) / ***PIN: 1603147522***
+![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_47681.jpg)  
+***Image credit:*** [***@rdc768***](https://x.com/rdc768) / ***PIN: 3137056693***
 
 Your embedded file is ***compressed*** (depending on file type) and ***encrypted*** with ***PIN*** protection.  
 The data file, if required, is split into multiple [***64KB ICC Profile segments***](https://youtu.be/qduwJjtT-tY) within the ***JPG*** cover image.  
