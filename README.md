@@ -15,6 +15,9 @@ Compatible hosting sites, ***listed below***, have their own ***much smaller*** 
 
 Your embedded data file is ***compressed*** (depending on file size & type) and ***encrypted*** with ***PIN*** protection.  
 The file, if required, is split into multiple [***64KB APP2 Segments (ICC Color Profile)***](https://youtu.be/1213w-k9X9M) within the ***JPG*** cover image.  
+
+(*You can try the [***jdvrif Web App, here,***](https://cleasbycode.co.uk/jdvrif/index/) if you don't want to download and compile the CLI source code.*)
+
 ## Usage (Linux - jdvin / jdvout)
 
 ```console
@@ -70,19 +73,14 @@ For example, a **50KB** workflow.json file compressed down to **6KB**, making it
 Also with ***Mastodon***, the size limit is measured by the ***data file size*** and not the combined image size.  
 For example, if your cover image is **1MB** you can still embed a data file up to the **~6MB** size limit.
 
-You can try [***jdvrif Web App***](https://cleasbycode.co.uk/jdvrif/index/) if you don't want to download and compile the source code.  
-
 https://github.com/user-attachments/assets/f51b2c89-23cb-423b-8d35-aa2300003f2e
 
-* **ImgPile -** *You must sign in to an account before sharing your data-embedded JPG image on ImgPile*.  
-*Sharing your image without logging in, your embedded data will not be preserved.*
+## Third-Party Libraries
 
-My other programs you may find useful:-  
+This project makes use of the following third-party library:
 
-* [pdvzip: CLI tool to embed a ZIP file within a tweetable and "executable" PNG-ZIP polyglot image.](https://github.com/CleasbyCode/pdvzip)
-* [imgprmt: CLI tool to embed an image prompt (e.g. "Midjourney") within a tweetable JPG-HTML polyglot image.](https://github.com/CleasbyCode/imgprmt)
-* [pdvrdt: CLI tool to encrypt, compress & embed any file type within a PNG image.](https://github.com/CleasbyCode/pdvrdt)
-* [pdvps: PowerShell / C++ CLI tool to encrypt & embed any file type within a tweetable and "executable" PNG image](https://github.com/CleasbyCode/pdvps)   
+- **zlib**: General-purpose compression library
+  - License: zlib/libpng license (see [***LICENSE***](https://github.com/madler/zlib/blob/develop/LICENSE) file)
+  - Copyright (C) 1995-2024 Jean-loup Gailly and Mark Adler
 
 ##
-
