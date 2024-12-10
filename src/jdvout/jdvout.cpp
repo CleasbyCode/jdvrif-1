@@ -31,7 +31,7 @@ int jdvOut(const std::string& IMAGE_FILENAME) {
 		JDV_SIG_INDEX 	= searchFunc(Image_Vec, 0, 0, JDV_SIG),
 		PROFILE_SIG_INDEX = searchFunc(Image_Vec, 0, 0, PROFILE_SIG),
 		DATA_FILE_SIZE = getByteValue(Image_Vec, DATA_FILE_SIZE_INDEX);
-		
+
 	if (JDV_SIG_INDEX == Image_Vec.size()) {
 		std::cerr << "\nImage File Error: Signature check failure. This is not a valid jdvrif file-embedded image.\n\n";
 		return 1;
@@ -58,7 +58,7 @@ int jdvOut(const std::string& IMAGE_FILENAME) {
 	const uint32_t INFLATED_FILE_SIZE = inflateFile(Decrypted_File_Vec);
 
 	bool isInflateFailure = Decrypted_File_Vec.empty() || INFLATED_FILE_SIZE != DATA_FILE_SIZE || byte_check != DECRYPTED_FILENAME[0];
-	
+				 
 	if (isInflateFailure) {	
 		std::fstream file(IMAGE_FILENAME, std::ios::in | std::ios::out | std::ios::binary);
 		std::streampos failure_index = JDV_SIG_INDEX + INDEX_DIFF - 1;
@@ -70,7 +70,7 @@ int jdvOut(const std::string& IMAGE_FILENAME) {
 
 		byte = byte == 0x90 ? 0 : ++byte;
 		
-		if (byte > 3) {
+		if (byte > 2) {
 			file.close();
 			std::ofstream file(IMAGE_FILENAME, std::ios::out | std::ios::trunc | std::ios::binary);
 		} else {
