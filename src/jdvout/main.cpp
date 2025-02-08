@@ -1,7 +1,9 @@
-//	JPG Data Vehicle (jdvout v2.2) Created by Nicholas Cleasby (@CleasbyCode) 10/04/2023
+//	JPG Data Vehicle (jdvout v3.2) Created by Nicholas Cleasby (@CleasbyCode) 10/04/2023
 //
 //	To compile program (Linux):
-// 	$ g++ main.cpp -O2 -lz -s -o jdvout
+
+// 	$ sudo apt-get install libsodium-dev
+//	$ g++ main.cpp -O2 -lz -lsodium -s -o jdvout
 //	$ sudo cp jdvout /usr/bin
 
 // 	Run it:
@@ -34,7 +36,7 @@ int main(int argc, char** argv) {
     const std::string IMAGE_EXTENSION = IMAGE_PATH.extension().string();
 
     if (IMAGE_EXTENSION != ".jpg" && IMAGE_EXTENSION != ".jpeg" && IMAGE_EXTENSION != ".jfif") {
-	std::cerr << "\nFile Type Error: Invalid file extension. Expecting only \"jpg, jpeg or jfif\" image extensions.\n\n";
+	std::cerr << "\nFile Type Error: Invalid file extension. Only expecting \"jpg, jpeg or jfif\" image extensions.\n\n";
         return 1;
     }
 
