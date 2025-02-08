@@ -2,15 +2,20 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <set>
 #include <random>
 #include <cstdint>
 #include <fstream>
 #include <regex>
-#include <set>
 #include <iostream>
 #include <string>
 #include <vector>
 #include <iterator>
+
+// This project uses libsodium (https://libsodium.org/) for cryptographic functions.
+#define SODIUM_STATIC
+#include <sodium.h>
+// Copyright (c) 2013-2025 Frank Denis <github@pureftpd.org>
 
 // https://github.com/madler/zlib
 #include <zlib.h>
@@ -18,7 +23,6 @@
 
 #include "profilesVec.cpp"
 #include "writeFile.cpp"
-#include "crc32.cpp"
 #include "searchFunc.cpp"
 #include "eraseSegments.cpp"
 #include "valueUpdater.cpp"
@@ -32,18 +36,18 @@
 template <uint8_t N>
 uint32_t searchFunc(std::vector<uint8_t>&, uint32_t, const uint8_t, const uint8_t (&)[N]);
 
-uint32_t 
-	crcUpdate(uint8_t*, uint32_t),
-	encryptFile(std::vector<uint8_t>&, std::vector<uint8_t>&, uint32_t, std::string&),
-	deflateFile(std::vector<uint8_t>&, bool),
-	getByteValue(const std::vector<uint8_t>&, const uint32_t);
+template <typename T>
+T getByteValue(const std::vector<uint8_t>&, uint32_t);
+
+uint64_t encryptFile(std::vector<uint8_t>&, std::vector<uint8_t>&, std::string&);
 
 bool writeFile(std::vector<uint8_t>&);
 
 void
 	eraseSegments(std::vector<uint8_t>&),
+	deflateFile(std::vector<uint8_t>&, bool),
 	segmentDataFile(std::vector<uint8_t>&, std::vector<uint8_t>&),
-	valueUpdater(std::vector<uint8_t>&, uint32_t, const uint32_t, uint8_t),
+	valueUpdater(std::vector<uint8_t>&, uint32_t, const uint64_t, uint8_t),
 	displayInfo();
 
-int jdvIn(const std::string&, std::string&, bool, bool);
+int jdvIn(const std::string&, std::string&, ArgOption, bool);
