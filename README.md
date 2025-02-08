@@ -1,8 +1,8 @@
 # jdvrif
 
-Use CLI tools ***jdvin*** & ***jdvout*** with a JPG image, to embed or extract any file, up to **2GB** (cover image + data file).  
+Use CLI tools ***jdvin*** & ***jdvout*** with a JPG image, to hide/extract any file type, up to ***2GB** (cover image + data file).  
 
-Compatible hosting sites, ***listed below***, have their own ***much smaller*** image size limits:
+*Compatible hosting sites, ***listed below***, have their own ***much smaller*** image size limits:
 * ***Flickr*** (**200MB**), ***ImgPile*** (**100MB**), ***ImgBB*** (**32MB**), ***PostImage*** (**32MB**), ***Reddit*** (**20MB** / ***-r option***),
 * Limit measured by data file size: ***Mastodon*** (**~6MB**), ***Tumblr*** (**~64KB**), ***Twitter*** (**~10KB**).
   
@@ -10,19 +10,19 @@ Compatible hosting sites, ***listed below***, have their own ***much smaller*** 
 
 ***jdvrif*** partly derives from the ***[technique demonstrated](https://www.vice.com/en/article/bj4wxm/tiny-picture-twitter-complete-works-of-shakespeare-steganography)*** by security researcher ***[David Buchanan](https://www.da.vidbuchanan.co.uk/).*** 
 
-![Demo Image](https://github.com/CleasbyCode/jdvrif-1/blob/main/demo_image/jrif_79866.jpg)  
-***Image credit:*** [***@rdc768***](https://x.com/rdc768) / ***PIN: 3611019770***
+![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_84599.jpg)  
+***Image credit:*** [***@R4DUai***](https://x.com/R4DUai) / ***PIN: 16924450276107164889***
 
-Your embedded data file is ***compressed*** (depending on file size & type) and ***encrypted*** with ***PIN*** protection.  
-The file, if required, is split into multiple [***64KB APP2 Segments (ICC Color Profile)***](https://youtu.be/1213w-k9X9M) within the ***JPG*** cover image.  
+For extra security, your data file is also compressed (*zlib*) and encrypted using the ***libsodium*** crypto library. 
 
-(*You can try the [***jdvrif Web App, here,***](https://cleasbycode.co.uk/jdvrif/index/) if you don't want to download and compile the CLI source code.*)
+*You can try the [***jdvrif Web App, here,***](https://cleasbycode.co.uk/jdvrif/index/) if you don't want to download and compile the CLI source code.*
 
 ## Usage (Linux - jdvin / jdvout)
 
 ```console
 
-user1@linuxbox:~/Downloads/jdvrif-main/src/jdvin$ g++ main.cpp -O2 -lz -s -o jdvin
+user1@linuxbox:~/Downloads/jdvrif-main/src/jdvin$ sudo apt-get install libsodium-dev
+user1@linuxbox:~/Downloads/jdvrif-main/src/jdvin$ g++ main.cpp -O2 -lz -lsodium -s -o jdvin
 user1@linuxbox:~/Downloads/jdvrif-main/src/jdvin$ sudo cp jdvin /usr/bin
 
 user1@linuxbox:~/Desktop$ jdvin 
@@ -40,7 +40,7 @@ Important: Please remember to keep your PIN safe, so that you can extract the hi
 
 Complete!
 
-user1@linuxbox:~/Downloads/jdvrif-main/src/jdvout$ g++ main.cpp -O2 -lz -s -o jdvout
+user1@linuxbox:~/Downloads/jdvrif-main/src/jdvout$ g++ main.cpp -O2 -lz -lsodium -s -o jdvout
 user1@linuxbox:~/Downloads/jdvrif-main/src/jdvout$ sudo cp jdvout /usr/bin
 
 user1@linuxbox:~/Desktop$ jdvout
@@ -68,7 +68,7 @@ To correctly download an image from ***Flickr***, click the download arrow near 
 
 With ***X/Twitter*** & ***Tumblr***, the small size limits (**~10KB** / **~64KB**) are measured by the ***data file size*** and not the combined image size.
 As the data file is compressed when embedded, you should be able to hide files larger than **10KB** or **64KB**.
-For example, a **50KB** workflow.json file compressed down to **6KB**, making it compatible with sharing on ***X/Twitter.***
+For example, a **50KB** workflow.json file compressed down to **6KB**, making it compatible with sharing on ***X/Twitter.*** 
 
 Also with ***Mastodon***, the size limit is measured by the ***data file size*** and not the combined image size.  
 For example, if your cover image is **1MB** you can still embed a data file up to the **~6MB** size limit.
@@ -77,10 +77,14 @@ https://github.com/user-attachments/assets/f51b2c89-23cb-423b-8d35-aa2300003f2e
 
 ## Third-Party Libraries
 
-This project makes use of the following third-party library:
+This project makes use of the following third-party libraries:
 
+- [**libsodium**](https://libsodium.org/) for cryptographic functions.
+  - [**LICENSE**](https://github.com/jedisct1/libsodium/blob/master/LICENSE)
+  - Copyright (c) 2013-2025 Frank Denis (github@pureftpd.org)
 - **zlib**: General-purpose compression library
   - License: zlib/libpng license (see [***LICENSE***](https://github.com/madler/zlib/blob/develop/LICENSE) file)
   - Copyright (C) 1995-2024 Jean-loup Gailly and Mark Adler
+    
 
 ##
