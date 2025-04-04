@@ -47,8 +47,7 @@ uint64_t encryptFile(std::vector<uint8_t>&, std::vector<uint8_t>&, std::string&,
 bool 
 	isCompressedFile(const std::string&),
 	hasValidFilename(const std::string&),
-	writeFile(std::vector<uint8_t>&),
-	splitDataFile(std::vector<uint8_t>&, std::vector<uint8_t>&);
+	writeFile(std::vector<uint8_t>&);
 
 void
 	validateFiles(const std::string&, const std::string&, ArgOption),
@@ -56,6 +55,7 @@ void
 	eraseSegments(std::vector<uint8_t>&),
 	deflateFile(std::vector<uint8_t>&, bool),
 	valueUpdater(std::vector<uint8_t>&, uint32_t, const uint64_t, uint8_t),
+	splitDataFile(std::vector<uint8_t>&, std::vector<uint8_t>&, bool&),
 	displayInfo();
 
 int jdvIn(const std::string&, std::string&, ArgOption, bool);
