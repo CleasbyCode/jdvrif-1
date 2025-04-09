@@ -1,8 +1,12 @@
 # jdvrif
 
-Use CLI tools ***jdvin*** & ***jdvout*** with a JPG cover image to hide or extract any file type, up to ***2GB**.  
+***jdvrif*** is a *steganography-like* utility for ***Linux*** and ***Windows***. It consists of two CLI tools, ***jdvin***, *used for embedding a data file within a ***JPG*** cover image*, and ***jdvout***, *used for extracting the hidden file from the cover image.*  
 
-*Compatible hosting sites, ***listed below***, have their own ***much smaller*** size ***limits*** and *other requirements.  
+Unlike traditional steganography tools, where data is concealed within the pixels of a cover image, such as the ***LSB*** method, ***jdvrif*** hides files within ***application segments*** of a ***JPG*** image. You can embed any file type up to ***2GB***, although compatible hosting sites (listed below) have their own ***much smaller*** size limits and *other requirements.  
+
+For increased storage capacity and better security, your embedded data file is compressed with ***zlib/deflate*** (*if not already a compressed file type*) and encrypted using the ***libsodium*** cryptographic library.  
+
+***jdvrif*** partly derives from the ***[technique implemented](https://www.vice.com/en/article/bj4wxm/tiny-picture-twitter-complete-works-of-shakespeare-steganography)*** by security researcher ***[David Buchanan](https://www.da.vidbuchanan.co.uk/).*** 
 
 *Limit measured by the combined size of the cover image + compressed data file:*  
 ● ***Flickr*** (**200MB**), ***ImgPile*** (**100MB**), ***ImgBB*** (**32MB**), ***PostImage*** (**32MB**), ***Reddit*** (**20MB** | ***-r option***).  
@@ -14,12 +18,10 @@ Use CLI tools ***jdvin*** & ***jdvout*** with a JPG cover image to hide or extra
 ● ***Bluesky*** (***Image:*** **800KB** | ***Compressed data file:*** **~106KB** | ***-b option***).  
 *Use the "***bsky_post.py***" script, found within the ***src folder*** of this repo, to post images on ***Bluesky***.*
   
-***jdvrif*** partly derives from the ***[technique implemented](https://www.vice.com/en/article/bj4wxm/tiny-picture-twitter-complete-works-of-shakespeare-steganography)*** by security researcher ***[David Buchanan](https://www.da.vidbuchanan.co.uk/).*** 
 
-![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_18438.jpg)  
-***Image credit:*** [***@lemon_rand6334***](https://x.com/lemon_rand6334) / ***PIN: 10658258811807804135***
 
-For increased storage capacity and better security, your embedded data file is compressed with ***zlib/deflate*** (*if not already a compressed file type*) and encrypted using the ***libsodium*** crypto library. 
+![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_42139.jpg)  
+***Image credit:*** [***@carochan_me***](https://x.com/carochan_me) / ***PIN: 15981008481739377139***
 
 *You can try the [***jdvrif Web App, here,***](https://cleasbycode.co.uk/jdvrif/index/) if you don't want to download and compile the CLI source code.* Web file uploads are limited to 20MB. 
 
@@ -28,7 +30,8 @@ For increased storage capacity and better security, your embedded data file is c
 ```console
 
 user1@linuxbox:~/Downloads/jdvrif-main/src/jdvin$ sudo apt-get install libsodium-dev
-user1@linuxbox:~/Downloads/jdvrif-main/src/jdvin$ g++ main.cpp -O2 -lz -lsodium -s -o jdvin
+user1@linuxbox:~/Downloads/jdvrif-main/src/jdvin$ sudo apt-get install libturbojpeg-dev
+user1@linuxbox:~/Downloads/jdvrif-main/src/jdvin$ g++ main.cpp -O2 -lz -lsodium -lturbojpeg -s -o jdvin
 user1@linuxbox:~/Downloads/jdvrif-main/src/jdvin$ sudo cp jdvin /usr/bin
 
 user1@linuxbox:~/Desktop$ jdvin 
@@ -65,7 +68,7 @@ Complete! Please check your file.
 ```
 To correctly download images from ***X/Twitter*** or ***Reddit***, click the image in the post to ***fully expand it***, before saving.  
 
-https://github.com/user-attachments/assets/b54dd925-2c0b-4fbf-890e-4ea5cc197292
+https://github.com/user-attachments/assets/7b6485f2-969d-47d4-86a7-c9b22920ee0a
 
 To create "*file-embedded*" ***JPG*** images compatible for posting on ***Reddit***, use the ***-r*** option with ***jdvin***.  
 From the ***Reddit*** site, click "*Create Post*" then select "*Images & Video*" tab, to post your ***JPG*** image.  
@@ -103,9 +106,13 @@ https://github.com/user-attachments/assets/e284979c-9c73-487e-bd2a-57504e897257
 
 This project makes use of the following third-party libraries:
 
-- [**libsodium**](https://libsodium.org/) for cryptographic functions.
+- **libsodium**: For cryptographic functions.
   - [**LICENSE**](https://github.com/jedisct1/libsodium/blob/master/LICENSE)
-  - Copyright (c) 2013-2025 Frank Denis (github@pureftpd.org)
+  - Copyright (C) 2013-2025 Frank Denis (github@pureftpd.org)
+- libjpeg-turbo (see [***LICENSE***](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/main/LICENSE.md) file)  
+  - {This software is based in part on the work of the Independent JPEG Group.}
+  - Copyright (C) 2009-2024 D. R. Commander. All Rights Reserved.
+  - Copyright (C) 2015 Viktor Szathmáry. All Rights Reserved.
 - **zlib**: General-purpose compression library
   - License: zlib/libpng license (see [***LICENSE***](https://github.com/madler/zlib/blob/develop/LICENSE) file)
   - Copyright (C) 1995-2024 Jean-loup Gailly and Mark Adler
