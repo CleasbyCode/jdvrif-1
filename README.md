@@ -73,15 +73,17 @@ https://github.com/user-attachments/assets/7b6485f2-969d-47d4-86a7-c9b22920ee0a
 To create "*file-embedded*" ***JPG*** images compatible for posting on ***Reddit***, use the ***-r*** option with ***jdvin***.  
 From the ***Reddit*** site, click "*Create Post*" then select "*Images & Video*" tab, to post your ***JPG*** image.  
 
+https://github.com/user-attachments/assets/28553eaa-4162-43c5-b596-f6ab676c1b61
+
 To create "*file-embedded*" ***JPG*** images compatible for posting on ***Bluesky***, use the ***-b*** option with ***jdvin***.
 
 For ***Bluesky***, you are required to use the ***Python*** script "*bsky_post.py*" (found in the repo ***src*** folder), to post the image.
 It will not work if you post images via the ***Bluesky*** browser site or mobile app.
 
 Bluesky script example:
-
+```console
 $ python3 bsky_post.py --handle exampleuser.bsky.social --password pxae-f17r-alp4-xqka --image jrif_11050.jpg --alt-text "*text to describe image, here...*" "*standard text to appear in main post, here...*"
-
+```
 You will need to create an app password from your ***Bluesky*** account. (*https://bsky.app/settings/app-passwords*)
 
 https://github.com/user-attachments/assets/dcc7c31d-4bec-4741-81e5-3b70fd6c29f5
@@ -94,13 +96,13 @@ As the embedded data file is compressed with ***jdvin*** using ***zlib/deflate**
 Also with ***Mastodon***, the size limit is measured by the ***data file size*** and not the combined image + data file size.  
 For example, if your cover image is **1MB** you can still embed a data file up to the **~6MB** ***Mastodon*** size limit.
 
-https://github.com/user-attachments/assets/cbae0361-bbb7-433c-a9a6-851c74940cd9
+https://github.com/user-attachments/assets/ba338a2b-5c38-4cb7-808b-83a642fc618c
 
-https://github.com/user-attachments/assets/7e243233-ae8d-4220-9dfd-eff6d28b8f2b  
+https://github.com/user-attachments/assets/5a9fb804-3354-44ce-ab09-064d446bde42
 
 To correctly download an image from ***Flickr***, click the download arrow near the bottom right-hand corner of the page and select ***Original*** for the size of image to download.
 
-https://github.com/user-attachments/assets/e284979c-9c73-487e-bd2a-57504e897257
+https://github.com/user-attachments/assets/3f393e2c-145f-49ab-a952-d2b120bad9f9
 
 ## Third-Party Libraries
 
