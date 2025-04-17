@@ -1,8 +1,14 @@
 # jdvrif
 
-***jdvrif*** is a *steganography-like* utility for ***Linux*** and ***Windows***. It consists of two CLI tools, ***jdvin***, *used for embedding a data file within a ***JPG*** cover image*, and ***jdvout***, *used for extracting the hidden file from the cover image.*  
+***jdvrif*** is a *"steganography-like"* utility for ***Linux*** and ***Windows***. It consists of two CLI tools, ***jdvin***, *used for embedding a data file within a ***JPG*** cover image*, and ***jdvout***, *used for extracting the hidden file from the cover image.*  
 
-Unlike traditional steganography tools, where data is concealed within the pixels of a cover image, such as the ***LSB*** method, ***jdvrif*** hides files within ***application segments*** of a ***JPG*** image. You can embed any file type up to ***2GB***, although compatible hosting sites (listed below) have their own ***much smaller*** size limits and *other requirements.  
+There is also a [***jdvrif Web App,***](https://cleasbycode.co.uk/jdvrif/index/) available to use, if you don't want to download and compile the CLI source code.  
+*Web file uploads are limited to 20MB.*    
+
+![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_60228.jpg)  
+*Image credit: **Camouflage** is the work of [***@carochan_me***](https://x.com/carochan_me) / ***PIN: 11455761492008362387****
+
+Unlike the common steganography method of concealing data within the pixels of a cover image ([***LSB***](https://ctf101.org/forensics/what-is-stegonagraphy/)), ***jdvrif*** hides files within ***application segments*** of a ***JPG*** image. You can embed any file type up to ***2GB***, although compatible hosting sites (listed below) have their own ***much smaller*** size limits and *other requirements.  
 
 For increased storage capacity and better security, your embedded data file is compressed with ***zlib/deflate*** (*if not already a compressed file type*) and encrypted using the ***libsodium*** cryptographic library.  
 
@@ -18,13 +24,6 @@ For increased storage capacity and better security, your embedded data file is c
 ● ***Bluesky*** (***Image:*** **800KB** | ***Compressed data file:*** **~106KB** | ***-b option***).  
 *Use the "***bsky_post.py***" script, found within the ***src folder*** of this repo, to post images on ***Bluesky***.*
   
-
-
-![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_42139.jpg)  
-***Image credit:*** [***@carochan_me***](https://x.com/carochan_me) / ***PIN: 15981008481739377139***
-
-*You can try the [***jdvrif Web App, here,***](https://cleasbycode.co.uk/jdvrif/index/) if you don't want to download and compile the CLI source code.* Web file uploads are limited to 20MB. 
-
 ## Usage (Linux - jdvin / jdvout)
 
 ```console
@@ -88,7 +87,7 @@ You will need to create an app password from your ***Bluesky*** account. (*https
 
 https://github.com/user-attachments/assets/dcc7c31d-4bec-4741-81e5-3b70fd6c29f5
 
-https://github.com/user-attachments/assets/41ee5e7f-7ae0-4f55-93ba-ba2dc9a027ab
+https://github.com/user-attachments/assets/d470483f-e6e0-474a-8933-d50c083b8e11
 
 With ***X/Twitter,*** ***Bluesky,*** & ***Tumblr***, the small size limits are measured by the ***data file size*** and not the combined image + data file size.
 As the embedded data file is compressed with ***jdvin*** using ***zlib/deflate*** (*if not already a compressed file type*), you should be able to get significantly more than the default size limit, especially for text documents and other file types that compress well. You may wish to compress the data file yourself (***zip, rar, 7z***, etc) before embedding it with ***jdvin***, so as to know exactly what the compressed file size will be.
@@ -119,5 +118,4 @@ This project makes use of the following third-party libraries:
   - License: zlib/libpng license (see [***LICENSE***](https://github.com/madler/zlib/blob/develop/LICENSE) file)
   - Copyright (C) 1995-2024 Jean-loup Gailly and Mark Adler
     
-
 ##
