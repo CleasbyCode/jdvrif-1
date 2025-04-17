@@ -27,10 +27,11 @@ uint8_t jdvIn(const std::string& IMAGE_FILENAME, std::string& data_filename, Arg
 		return 1;
 	}
 	
-	uint8_t quality_val = 97;
+	bool hasBlueskyOption = (platform == ArgOption::Bluesky);
 	
-	// For better compatibility, re-encode image to JPG progressive format with a quality value set at 97 with no chroma subsampling.
-	transcodeImage(image_vec, quality_val);
+	// For better compatibility, default re-encode image to JPG Progressive format with a quality value set at 97 with no chroma subsampling.
+	// If Bluesky option, re-encode to standard Baseline format with a quality value set at 85.
+	transcodeImage(image_vec, hasBlueskyOption);
 
 	// Remove superfluous segments from cover image. (EXIF, ICC color profile, etc.)
 	eraseSegments(image_vec);
@@ -40,14 +41,12 @@ uint8_t jdvIn(const std::string& IMAGE_FILENAME, std::string& data_filename, Arg
 
 	constexpr uint8_t DATA_FILENAME_MAX_LENGTH = 20;
 
-	const uint8_t DATA_FILENAME_LENGTH = static_cast<uint8_t>(data_filename.length());
+	const uint8_t DATA_FILENAME_LENGTH = static_cast<uint8_t>(data_filename.size());
 
 	if (DATA_FILENAME_LENGTH > DATA_FILENAME_MAX_LENGTH) {
     		std::cerr << "\nData File Error: For compatibility requirements, length of data filename must not exceed 20 characters.\n\n";
     	 	return 1;
 	}
-
-	bool hasBlueskyOption = (platform == ArgOption::Bluesky);
 
 	if (hasBlueskyOption) {
 		segment_vec.swap(bluesky_exif_vec);	// Use the EXIF segment instead of the default color profile segment to store user data.
@@ -79,8 +78,7 @@ uint8_t jdvIn(const std::string& IMAGE_FILENAME, std::string& data_filename, Arg
 
 	if (hasBlueskyOption) {	 // We can store binary data within the first (EXIF) segment, with a max compressed storage capacity close to ~64KB. See encryptFile.cpp
 		constexpr uint8_t MARKER_BYTES_VAL = 4; // FFD8, FFE1
-		uint16_t exif_segment_size = static_cast<uint32_t>(segment_vec.size() - MARKER_BYTES_VAL); 
-
+	
 		uint8_t	
 			value_bit_length = 16,
 			exif_segment_size_field_index = 0x04,  
@@ -90,10 +88,11 @@ uint8_t jdvIn(const std::string& IMAGE_FILENAME, std::string& data_filename, Arg
 			exif_segment_subifd_offset_field_index = 0x5A;
 
 		uint16_t 
+			exif_segment_size = static_cast<uint32_t>(segment_vec.size() - MARKER_BYTES_VAL),
 			exif_xres_offset = exif_segment_size - 0x36,
 			exif_yres_offset = exif_segment_size - 0x2E,
 			exif_subifd_offset = exif_segment_size - 0x26,
-			exif_artist_size = (exif_segment_size - 0x90) + MARKER_BYTES_VAL;
+			exif_artist_size = exif_segment_size - 0x8C;
 
 		valueUpdater(segment_vec, exif_segment_size_field_index, exif_segment_size, value_bit_length);
 		
@@ -143,6 +142,11 @@ uint8_t jdvIn(const std::string& IMAGE_FILENAME, std::string& data_filename, Arg
 		} else {
 			image_vec.insert(image_vec.begin(), data_file_vec.begin(), data_file_vec.end());
 			if (shouldDisplayMastodonWarning) {
+				
+				// The warning is important because Mastodon will allow you to post an image that is greater than its 100 segments limit, as long as you do not exceed
+				// the image size limit, which is 16MB. This seems fine until someone downloads/saves the image. Data segments over the limit will be truncated, so parts 
+				// of the data file will be missing when an attempt is made to extract the (now corrupted) file from the image.
+
 				std::cout << "\n**Warning**\n\nEmbedded image is not compatible with Mastodon. Image file exceeds platform's segments limit.\n";
 			}
 		}
