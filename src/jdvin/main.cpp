@@ -12,6 +12,7 @@
 #include "jdvin.h"
 
 int main(int argc, char** argv) {
+    std::ios::sync_with_stdio(false);
 	try {
 		ProgramArgs args = ProgramArgs::parse(argc, argv);
 		if (!hasValidFilename(args.image_file) || !hasValidFilename(args.data_file)) {

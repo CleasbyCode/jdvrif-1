@@ -5,7 +5,7 @@ uint64_t encryptFile(std::vector<uint8_t>& segment_vec, std::vector<uint8_t>& da
  	std::mt19937 gen(rd());
 	std::uniform_int_distribution<unsigned short> dis(1, 255); 
 		
-	const uint8_t XOR_KEY_LENGTH = 24;
+	constexpr uint8_t XOR_KEY_LENGTH = 24;
 	
 	uint16_t
 		data_filename_xor_key_index = hasBlueskyOption ? 0x175 : 0x2FB,
@@ -21,9 +21,9 @@ uint64_t encryptFile(std::vector<uint8_t>& segment_vec, std::vector<uint8_t>& da
 		segment_vec[data_filename_index++] = data_filename[data_filename_char_pos++] ^ segment_vec[data_filename_xor_key_index++];
 	}	
 	
-	uint32_t data_file_vec_size = static_cast<uint32_t>(data_file_vec.size());
+	const uint32_t DATA_FILE_VEC_SIZE = static_cast<uint32_t>(data_file_vec.size());
 
-	segment_vec.reserve(segment_vec.size() + data_file_vec_size);
+	segment_vec.reserve(segment_vec.size() + DATA_FILE_VEC_SIZE);
 	
 	std::array<uint8_t, crypto_secretbox_KEYBYTES> key;
     	crypto_secretbox_keygen(key.data());
@@ -31,21 +31,22 @@ uint64_t encryptFile(std::vector<uint8_t>& segment_vec, std::vector<uint8_t>& da
 	std::array<uint8_t, crypto_secretbox_NONCEBYTES> nonce;
    	randombytes_buf(nonce.data(), nonce.size());
 
+	constexpr uint16_t EXIF_SEGMENT_DATA_INSERT_INDEX = 0x1D1;
+
 	const uint16_t
-		EXIF_SEGMENT_DATA_INSERT_INDEX = 0x1D1,
 		SODIUM_KEY_INDEX = hasBlueskyOption ? 0x18D : 0x313,     
 		NONCE_KEY_INDEX  = hasBlueskyOption ? 0x1AD : 0x333;  
 	
-	std::copy(key.begin(), key.end(), segment_vec.begin() + SODIUM_KEY_INDEX); 	
-	std::copy(nonce.begin(), nonce.end(), segment_vec.begin() + NONCE_KEY_INDEX);
+	std::copy_n(key.begin(), crypto_secretbox_KEYBYTES, segment_vec.begin() + SODIUM_KEY_INDEX); 	
+	std::copy_n(nonce.begin(), crypto_secretbox_NONCEBYTES, segment_vec.begin() + NONCE_KEY_INDEX);
 
-    	std::vector<uint8_t> encrypted_vec(data_file_vec_size + crypto_secretbox_MACBYTES); 
+    	std::vector<uint8_t> encrypted_vec(DATA_FILE_VEC_SIZE + crypto_secretbox_MACBYTES); 
 
-    	crypto_secretbox_easy(encrypted_vec.data(), data_file_vec.data(), data_file_vec_size, nonce.data(), key.data());
+    	crypto_secretbox_easy(encrypted_vec.data(), data_file_vec.data(), DATA_FILE_VEC_SIZE, nonce.data(), key.data());
 
 	if (hasBlueskyOption) { // User has selected the -b argument option for the Bluesky platform.
-		constexpr uint16_t EXIF_SEGMENT_DATA_SIZE_LIMIT = 65027; // + With EXIF overhead segment data (511) - four bytes we don't count (FFD8 FFE1) = Max. segment size 65534.
-								         // Can't have 65535 (0xFFFF) as Bluesky will strip the EXIF segment.
+		constexpr uint16_t EXIF_SEGMENT_DATA_SIZE_LIMIT = 65027; // + With EXIF overhead segment data (511) - four bytes we don't count (FFD8 FFE1),  
+								         // = Max. segment size 65534 (0xFFFE). Can't have 65535 (0xFFFF) as Bluesky will strip the EXIF segment.
 		const uint32_t ENCRYPTED_VEC_SIZE = static_cast<uint32_t>(encrypted_vec.size());
 		
 		uint16_t compressed_file_size_index = 0x1CD;
@@ -54,16 +55,16 @@ uint64_t encryptFile(std::vector<uint8_t>& segment_vec, std::vector<uint8_t>& da
 		valueUpdater(segment_vec, compressed_file_size_index, ENCRYPTED_VEC_SIZE, value_bit_length);
 
 		// Split the data file if it exceeds the max compressed EXIF capacity of ~64KB. 
-		// We can then use the second segment (XMP) for the excess data.
+		// We can then use the second segment (XMP) for the remaining data.
 
 		if (ENCRYPTED_VEC_SIZE > EXIF_SEGMENT_DATA_SIZE_LIMIT) {
 			segment_vec.insert(segment_vec.begin() + EXIF_SEGMENT_DATA_INSERT_INDEX, encrypted_vec.begin(), encrypted_vec.begin() + EXIF_SEGMENT_DATA_SIZE_LIMIT);
 
-			uint32_t remaining_size = ENCRYPTED_VEC_SIZE - EXIF_SEGMENT_DATA_SIZE_LIMIT;
+			const uint32_t REMAINING_DATA_SIZE = ENCRYPTED_VEC_SIZE - EXIF_SEGMENT_DATA_SIZE_LIMIT;
 			
-			std::vector<uint8_t> tmp_xmp_vec(remaining_size);
+			std::vector<uint8_t> tmp_xmp_vec(REMAINING_DATA_SIZE);
 			
-			std::copy_n(encrypted_vec.begin() + EXIF_SEGMENT_DATA_SIZE_LIMIT, remaining_size, tmp_xmp_vec.begin());
+			std::copy_n(encrypted_vec.begin() + EXIF_SEGMENT_DATA_SIZE_LIMIT, REMAINING_DATA_SIZE, tmp_xmp_vec.begin());
 			
 			// We can only store Base64 encoded data in the XMP segment, so convert the binary data here.
 			convertToBase64(tmp_xmp_vec);
@@ -79,7 +80,7 @@ uint64_t encryptFile(std::vector<uint8_t>& segment_vec, std::vector<uint8_t>& da
 		}
 
 	} else { // Used the default color profile segment for data storage.
-		segment_vec.insert(segment_vec.end(), encrypted_vec.begin(), encrypted_vec.end()); 
+		std::copy_n(encrypted_vec.begin(), encrypted_vec.size(), std::back_inserter(segment_vec));
 	}	
 	
 	std::vector<uint8_t>().swap(encrypted_vec);
@@ -111,9 +112,9 @@ uint64_t encryptFile(std::vector<uint8_t>& segment_vec, std::vector<uint8_t>& da
 	std::mt19937_64 gen64(rd()); 
     	std::uniform_int_distribution<uint64_t> dis64; 
 
-    	uint64_t random_val = dis64(gen64); 
+    	const uint64_t RANDOM_VAL = dis64(gen64); 
 
-	valueUpdater(segment_vec, sodium_key_pos, random_val, value_bit_length);
+	valueUpdater(segment_vec, sodium_key_pos, RANDOM_VAL, value_bit_length);
 
 	return PIN;
 }
