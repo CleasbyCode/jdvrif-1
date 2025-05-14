@@ -1,9 +1,10 @@
-//	JPG Data Vehicle (jdvin v3.9) Created by Nicholas Cleasby (@CleasbyCode) 10/04/2023
+//	JPG Data Vehicle (jdvin v4.1) Created by Nicholas Cleasby (@CleasbyCode) 10/04/2023
 //
 //	Compile program (Linux):
 
 //	$ sudo apt-get install libsodium-dev
-//	$ g++ main.cpp -O2 -lz -lsodium -s -o jdvin
+//	$ sudo apt-get install libturbojpeg-dev
+//	$ g++ main.cpp -O2 -lz -lsodium -lturbojpeg -s -o jdvin
 //	$ sudo cp jdvin /usr/bin
 
 // 	Run it:
@@ -12,7 +13,7 @@
 #include "jdvin.h"
 
 int main(int argc, char** argv) {
-    std::ios::sync_with_stdio(false);
+	std::ios::sync_with_stdio(false);
 	try {
 		ProgramArgs args = ProgramArgs::parse(argc, argv);
 		if (!hasValidFilename(args.image_file) || !hasValidFilename(args.data_file)) {
