@@ -9,7 +9,7 @@ uint8_t jdvOut(const std::string& IMAGE_FILENAME) {
     	} 
 
 	std::vector<uint8_t> image_vec(IMAGE_FILE_SIZE);
-
+	
 	image_file_ifs.read(reinterpret_cast<char*>(image_vec.data()), IMAGE_FILE_SIZE);
 	image_file_ifs.close();
 	
