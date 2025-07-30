@@ -1,48 +1,62 @@
 # jdvrif
 
-A *"steganography-like"* command-line utility consisting of two CLI tools, ***jdvin***, *used for embedding a data file within a ***JPG*** cover image*, and ***jdvout***, *used for extracting the hidden file from the cover image.*  
+A steganography command-line tool used for embedding and extracting any file type via a **JPG** cover image.  
 
-*There is also a ***jdvrif Web App***, which you can try [***here***](https://cleasbycode.co.uk/jdvrif/index/) as a convenient alternative to downloading and compiling the CLI source code. Web file uploads are limited to 20MB.*    
+There is also a ***jdvrif Web App***, which you can try [***here***](https://cleasbycode.co.uk/jdvrif/index/) as a convenient alternative to downloading and compiling the CLI source code. Web file uploads are limited to **20MB**.    
 
-![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_60228.jpg)  
-*Image credit: **"Camouflage"** is the work of [***@carochan_me***](https://x.com/carochan_me) / ***PIN: 11455761492008362387****
+![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_71594.jpg)  
+*Image: **"Camouflage"** / ***PIN: 8532993820861383452****
 
-Unlike the common steganography method of concealing data within the pixels of a cover image ([***LSB***](https://ctf101.org/forensics/what-is-stegonagraphy/)), ***jdvrif*** hides files within ***application segments*** of a ***JPG*** image. You can embed any file type up to ***2GB***, although compatible sites (listed below) have their own ***much smaller*** size limits and *other requirements.  
+Unlike the common steganography method of concealing data within the pixels of a cover image ([***LSB***](https://ctf101.org/forensics/what-is-stegonagraphy/)), ***jdvrif*** hides files within ***application segments*** of a ***JPG*** image. 
+
+You can embed any file type up to ***2GB***, although compatible sites (*listed below*) have their own ***much smaller*** size limits and *other requirements.  
 
 For increased storage capacity and better security, your embedded data file is compressed with ***zlib/deflate*** and encrypted using the ***libsodium*** cryptographic library.  
 
 ***jdvrif*** partly derives from the ***[technique implemented](https://www.vice.com/en/article/bj4wxm/tiny-picture-twitter-complete-works-of-shakespeare-steganography)*** by security researcher ***[David Buchanan](https://www.da.vidbuchanan.co.uk/).*** 
+
+https://github.com/user-attachments/assets/01428038-3e8a-4e1c-a86c-2eda2cb6d986
+
 ## Compatible Platforms
 *Posting size limit measured by the combined size of the cover image + compressed data file:*  
 
 ● ***Flickr*** (**200MB**), ***ImgPile*** (**100MB**), ***ImgBB*** (**32MB**), ***PostImage*** (**32MB**), ***Reddit*** (**20MB** | ***-r option***).  
 
-*Limit measured by just the compressed data file size:*  
+*Size limit measured only by the compressed data file size:*  
 
 ● ***Mastodon*** (**~6MB**), ***Tumblr*** (**~64KB**), ***X-Twitter*** (**~10KB**).  
 
-*Seperate size limits for cover image, data file and other posting requirements:*  
+For example, with ***Mastodon***, if your cover image is **1MB** you can still embed a data file up to the **~6MB** size limit.
 
-● ***Bluesky*** (***Image:*** **800KB** | ***Compressed data file:*** **~106KB** | ***-b option***).  
-● "***bsky_post.py***" script is required to post images on ***Bluesky***.
+**Other: The ***Bluesky*** platform has separate size limits for the cover image and the compressed data file:*  
+
+● ***Bluesky*** (***-b option***). Cover image size limit (**800KB**). Compressed data file size limit (**~106KB**).  
+● "***bsky_post.py***" script is required to post images on ***Bluesky***. *More info on this further down the page.*
+
+Even though ***jdvrif*** will compress your data file, you may wish to compress the file yourself (zip, rar, 7z, etc.)  
+before embedding it with ***jdvrif***, so as to know exactly what the compressed data file size will be.   
+
+For platforms such as ***X-Twitter*** & ***Tumblr***, which have small size limits, you may want to focus on data files  
+that compress well, such as .txt documents, etc.  
   
-## Usage (Linux - jdvin / jdvout)
+## Usage (Linux)
 
 ```console
 
-user1@mx:~/Downloads/jdvrif-main/src/jdvin$ sudo apt-get install libsodium-dev
-user1@mx:~/Downloads/jdvrif-main/src/jdvin$ sudo apt-get install libturbojpeg0-dev
-user1@mx:~/Downloads/jdvrif-main/src/jdvin$ chmod +x compile_jdvin.sh
-user1@mx:~/Downloads/jdvrif-main/src/jdvin$ ./compile_jdvin.sh
-user1@mx:~/Downloads/jdvrif-main/src/jdvin$ Compilation successful. Executable 'jdvin' created.
-user1@mx:~/Downloads/jdvrif-main/src/jdvin$ sudo cp jdvin /usr/bin
+user1@mx:~/Downloads/jdvrif-main/src$ sudo apt-get install libsodium-dev
+user1@mx:~/Downloads/jdvrif-main/src$ sudo apt-get install libturbojpeg0-dev
+user1@mx:~/Downloads/jdvrif-main/src$ chmod +x compile_jdvrif.sh
+user1@mx:~/Downloads/jdvrif-main/src$ ./compile_jdvrif.sh
+user1@mx:~/Downloads/jdvrif-main/src$ Compilation successful. Executable 'jdvrif' created.
+user1@mx:~/Downloads/jdvrif-main/src$ sudo cp jdvrif /usr/bin
 
-user1@mx:~/Desktop$ jdvin 
+user1@mx:~/Desktop$ jdvrif 
 
-Usage: jdvin [-b|-r] <cover_image> <secret_file>  
-       jdvin --info
+Usage: jdvrif conceal [-b|-r] <cover_image> <secret_file>
+       jdvrif recover <cover_image>  
+       jdvrif --info
 
-user1@mx:~/Desktop$ jdvin Cover_Image.jpg Hidden_File.zip
+user1@mx:~/Desktop$ jdvrif conceal your_cover_image.jpg your_secret_file.doc
   
 Saved "file-embedded" JPG image: jrif_12462.jpg (143029 bytes).
 
@@ -51,63 +65,51 @@ Recovery PIN: [***2166776980318349924***]
 Important: Keep your PIN safe, so that you can extract the hidden file.
 
 Complete!
-
-user1@mx:~/Downloads/jdvrif-main/src/jdvout$ chmod +x compile_jdvout.sh
-user1@mx:~/Downloads/jdvrif-main/src/jdvout$ ./compile_jdvout.sh
-user1@mx:~/Downloads/jdvrif-main/src/jdvout$ Compilation successful. Executable 'jdvout' created.
-user1@mx:~/Downloads/jdvrif-main/src/jdvout$ sudo cp jdvout /usr/bin
-
-user1@mx:~/Desktop$ jdvout
-
-Usage: jdvout <file_embedded_image>
-       jdvout --info
         
-user1@mx:~/Desktop$ jdvout jrif_12462.jpg
+user1@mx:~/Desktop$ jdvrif recover jrif_12462.jpg
 
 PIN: *******************
 
-Extracted hidden file: Hidden_File.zip (6165 bytes).
+Extracted hidden file: your_secret_file.doc (6165 bytes).
 
 Complete! Please check your file.
 
 ```
-To correctly download images from ***X-Twitter*** or ***Reddit***, click the image in the post to ***fully expand it***, before saving.  
+jdvrif ***mode*** arguments:
+ 
+  ***conceal*** - Compresses, encrypts and embeds your secret data file within a ***JPG*** cover image.  
+  ***recover*** - Decrypts, uncompresses and extracts the concealed data file from a ***JPG*** cover image.
+ 
+jdvrif ***conceal*** mode platform options:
+ 
+  "***-b***" - To create compatible "*file-embedded*" ***JPG*** images for posting on the ***Bluesky*** platform, you must use the ***-b*** option with ***conceal*** mode.
+  ```console
+  $ jdvrif conceal -b my_image.jpg hidden.doc
+  ```
+  These images are only compatible for posting on ***Bluesky***. Your embedded data file will be removed if posted on a different platform.
+ 
+  You are required to use the Python script ***"bsky_post.py"*** (found in the repo ***src*** folder) to post the image to ***Bluesky***.
+  It will not work if you post images to ***Bluesky*** via the browser site or mobile app.
 
-https://github.com/user-attachments/assets/7b6485f2-969d-47d4-86a7-c9b22920ee0a
+  Script example:
+  
+  ```console
+   $ python3 bsky_post.py --handle exampleuser.bsky.social --password pxae-f17r-alp4-xqka
+    --image jrif_11050.jpg --alt-text "text to describe image" "text to appear in main post"
+  ```
+   You will also need to create an ***app password*** from your ***Bluesky*** account, to use with the ***bsky_post.py*** script. (https://bsky.app/settings/app-passwords).
 
-To create "*file-embedded*" ***JPG*** images compatible for posting on ***Reddit***, use the ***-r*** option with ***jdvin***.  
-From the ***Reddit*** site, click "*Create Post*" then select "*Images & Video*" tab, to post your ***JPG*** image.  
-
-https://github.com/user-attachments/assets/28553eaa-4162-43c5-b596-f6ab676c1b61
-
-To create "*file-embedded*" ***JPG*** images compatible for posting on ***Bluesky***, use the ***-b*** option with ***jdvin***.
-
-For ***Bluesky***, you are required to use the ***Python*** script "*bsky_post.py*" (found in the repo ***src/bsky*** folder), to post the image.
-It will not work if you post images via the ***Bluesky*** browser site or mobile app.
-
-Bluesky script example:
-```console
-$ python3 bsky_post.py --handle exampleuser.bsky.social --password pxae-f17r-alp4-xqka --image jrif_11050.jpg --alt-text "*text to describe image, here...*" "*standard text to appear in main post, here...*"
-```
-You will need to create an app password from your ***Bluesky*** account. (*https://bsky.app/settings/app-passwords*)
-
-https://github.com/user-attachments/assets/dcc7c31d-4bec-4741-81e5-3b70fd6c29f5
+   "***-r***" - To create compatible "*file-embedded*" ***JPG*** images for posting on the ***Reddit*** platform, you must use the ***-r*** option with ***conceal*** mode.
+   ```console
+  $ jdvrif conceal -r my_image.jpg secret.mp3 
+   ```
+   From the ***Reddit*** site, select "***Create Post***" followed by "***Images & Video***" tab, to attach and post your ***JPG*** image.
+  
+   These images are only compatible for posting on the ***Reddit***. Your embedded data file will be removed if posted on a different platform.
+  
+ To correctly download images from ***X-Twitter*** or ***Reddit***, click the image in the post to fully expand it, before saving.
 
 https://github.com/user-attachments/assets/e5d2e0f1-d110-4712-8334-b1394d59f3dd
-
-With ***X-Twitter,*** ***Bluesky,*** & ***Tumblr***, the small size limits are measured by the ***data file size*** and not the combined image + data file size.
-As the embedded data file is compressed with ***jdvin*** using ***zlib/deflate*** (*if not already a compressed file type*), you should be able to get significantly more than the default size limit, especially for text documents and other file types that compress well. You may wish to compress the data file yourself (***zip, rar, 7z***, etc) before embedding it with ***jdvin***, so as to know exactly what the compressed file size will be.
-
-Also with ***Mastodon***, the size limit is measured by the ***data file size*** and not the combined image + data file size.  
-For example, if your cover image is **1MB** you can still embed a data file up to the **~6MB** ***Mastodon*** size limit.
-
-https://github.com/user-attachments/assets/ba338a2b-5c38-4cb7-808b-83a642fc618c
-
-https://github.com/user-attachments/assets/5a9fb804-3354-44ce-ab09-064d446bde42
-
-To correctly download an image from ***Flickr***, click the download arrow near the bottom right-hand corner of the page and select ***Original*** for the size of image to download.
-
-https://github.com/user-attachments/assets/3f393e2c-145f-49ab-a952-d2b120bad9f9
 
 ## Third-Party Libraries
 
