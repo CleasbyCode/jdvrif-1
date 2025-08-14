@@ -2,10 +2,10 @@
 
 A steganography command-line tool used for embedding and extracting any file type via a **JPG** cover image.  
 
-There is also a ***jdvrif Web App***, which you can try [***here***](https://cleasbycode.co.uk/jdvrif/index/) as a convenient alternative to downloading and compiling the CLI source code. Web file uploads are limited to **20MB**.    
+There is also a Web App version, which you can try [***here***](https://cleasbycode.co.uk/jdvrif/index/) as a convenient alternative to downloading and compiling the CLI source code. Web file uploads are limited to **20MB**.    
 
-![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_71594.jpg)  
-*Image: **"Camouflage"** / ***PIN: 8532993820861383452****
+![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_73184.jpg)  
+*Image: **"A place of concealment"** / ***PIN: 17129461748195490639****
 
 Unlike the common steganography method of concealing data within the pixels of a cover image ([***LSB***](https://ctf101.org/forensics/what-is-stegonagraphy/)), ***jdvrif*** hides files within ***application segments*** of a ***JPG*** image. 
 
@@ -15,7 +15,9 @@ For increased storage capacity and better security, your embedded data file is c
 
 ***jdvrif*** partly derives from the ***[technique implemented](https://www.vice.com/en/article/bj4wxm/tiny-picture-twitter-complete-works-of-shakespeare-steganography)*** by security researcher ***[David Buchanan](https://www.da.vidbuchanan.co.uk/).*** 
 
-https://github.com/user-attachments/assets/01428038-3e8a-4e1c-a86c-2eda2cb6d986
+https://github.com/user-attachments/assets/8d21cdbb-30f0-424c-aeb8-bcacca8c4255
+
+https://github.com/user-attachments/assets/a7830132-55eb-42d9-88b8-49e16427b39a
 
 ## Compatible Platforms
 *Posting size limit measured by the combined size of the cover image + compressed data file:*  
@@ -32,9 +34,6 @@ For example, with ***Mastodon***, if your cover image is **1MB** you can still e
 
 ● ***Bluesky*** (***-b option***). Cover image size limit (**800KB**). Compressed data file size limit (**~106KB**).  
 ● "***bsky_post.py***" script is required to post images on ***Bluesky***. *More info on this further down the page.*
-
-Even though ***jdvrif*** will compress your data file, you may wish to compress the file yourself (zip, rar, 7z, etc.)  
-before embedding it with ***jdvrif***, so as to know exactly what the compressed data file size will be.   
 
 For platforms such as ***X-Twitter*** & ***Tumblr***, which have small size limits, you may want to focus on data files  
 that compress well, such as .txt documents, etc.  
@@ -57,6 +56,16 @@ Usage: jdvrif conceal [-b|-r] <cover_image> <secret_file>
        jdvrif --info
 
 user1@mx:~/Desktop$ jdvrif conceal your_cover_image.jpg your_secret_file.doc
+
+Platform compatibility for output image:-
+
+  ✓ X-Twitter
+  ✓ Tumblr
+  ✓ Mastodon
+  ✓ PostImage
+  ✓ ImgBB
+  ✓ ImgPile
+  ✓ Flickr
   
 Saved "file-embedded" JPG image: jrif_12462.jpg (143029 bytes).
 
@@ -97,7 +106,11 @@ jdvrif ***conceal*** mode platform options:
    $ python3 bsky_post.py --handle exampleuser.bsky.social --password pxae-f17r-alp4-xqka
     --image jrif_11050.jpg --alt-text "text to describe image" "text to appear in main post"
   ```
-   You will also need to create an ***app password*** from your ***Bluesky*** account, to use with the ***bsky_post.py*** script. (https://bsky.app/settings/app-passwords).
+   You will also need to create an ***app password*** from your ***Bluesky*** account, to use with the ***bsky_post.py*** script. (https://bsky.app/settings/app-passwords).  
+
+https://github.com/user-attachments/assets/b4c72ea7-40e3-49b0-89aa-ae2dd8ccccb9   
+
+https://github.com/user-attachments/assets/a84ffb6d-b5ce-4f66-bf65-7589d2d93a49
 
    "***-r***" - To create compatible "*file-embedded*" ***JPG*** images for posting on the ***Reddit*** platform, you must use the ***-r*** option with ***conceal*** mode.
    ```console
@@ -109,7 +122,7 @@ jdvrif ***conceal*** mode platform options:
   
  To correctly download images from ***X-Twitter*** or ***Reddit***, click the image in the post to fully expand it, before saving.
 
-https://github.com/user-attachments/assets/e5d2e0f1-d110-4712-8334-b1394d59f3dd
+https://github.com/user-attachments/assets/f56f54bb-658f-4b0e-a2f3-7d3428333304
 
 ## Third-Party Libraries
 
