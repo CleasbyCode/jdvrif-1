@@ -5,7 +5,7 @@ A steganography command-line tool used for embedding and extracting any file typ
 There is also a Web App version, which you can try [***here***](https://cleasbycode.co.uk/jdvrif/index/) as a convenient alternative to downloading and compiling the CLI source code. Web file uploads are limited to **20MB**.    
 
 ![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_73184.jpg)  
-*Image: **"A place of concealment"** / ***PIN: 17129461748195490639****
+*Demo Image: **"A place of concealment"** / ***PIN: 17129461748195490639****
 
 Unlike the common steganography method of concealing data within the pixels of a cover image ([***LSB***](https://ctf101.org/forensics/what-is-stegonagraphy/)), ***jdvrif*** hides files within ***application segments*** of a ***JPG*** image. 
 
@@ -32,7 +32,7 @@ For example, with ***Mastodon***, if your cover image is **1MB** you can still e
 
 **Other: The ***Bluesky*** platform has separate size limits for the cover image and the compressed data file:*  
 
-● ***Bluesky*** (***-b option***). Cover image size limit (**800KB**). Compressed data file size limit (**~106KB**).  
+● ***Bluesky*** (***-b option***). Cover image size limit (**800KB**). Compressed data file size limit (**~171KB**).  
 ● "***bsky_post.py***" script is required to post images on ***Bluesky***. *More info on this further down the page.*
 
 For platforms such as ***X-Twitter*** & ***Tumblr***, which have small size limits, you may want to focus on data files  
