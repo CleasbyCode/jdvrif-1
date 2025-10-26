@@ -1,4 +1,4 @@
-// JPG Data Vehicle (jdvrif v5.6) Created by Nicholas Cleasby (@CleasbyCode) 10/04/2023
+// JPG Data Vehicle (jdvrif v5.7) Created by Nicholas Cleasby (@CleasbyCode) 10/04/2023
 
 // Compile program (Linux):
 
@@ -90,7 +90,7 @@ namespace fs = std::filesystem;
 static void displayInfo() {
 	std::cout << R"(
 
-JPG Data Vehicle (jdvrif v5.6)
+JPG Data Vehicle (jdvrif v5.7)
 Created by Nicholas Cleasby (@CleasbyCode) 24/01/2023
 
 jdvrif is a metadata “steganography-like” command-line tool used for concealing and extracting
@@ -132,6 +132,7 @@ Platforms where size limit is measured by the combined size of cover image + com
 	• ImgBB     (32 MB)
 	• PostImage (32 MB)
 	• Reddit    (20 MB) — (use -r option).
+	• Pixelfed	(15 MB)
 
 Limit measured by compressed data file size only:
 
@@ -337,63 +338,67 @@ static std::optional<uint16_t> exif_orientation(const std::vector<uint8_t>& jpg)
     return std::nullopt;
 }
 
-static void rotate_rgb_180(std::vector<uint8_t>& rgb, int w, int h) {
-    const int stride = w * 3;
+// Generic rotate helpers for bpp = 3 or 4
+static void rotate_px_180(std::vector<uint8_t>& px, int w, int h, int bpp) {
+    const size_t stride = (size_t)w * bpp;
     for (int y = 0; y < h / 2; ++y) {
         int opp = h - 1 - y;
         for (int x = 0; x < w; ++x) {
-            for (int c = 0; c < 3; ++c)
-                std::swap(rgb[y*stride + x*3 + c], rgb[opp*stride + (w-1-x)*3 + c]);
+            size_t a = (size_t)y   * stride + (size_t)x        * bpp;
+            size_t b = (size_t)opp * stride + (size_t)(w-1-x)  * bpp;
+            for (int c = 0; c < bpp; ++c) std::swap(px[a + c], px[b + c]);
         }
     }
-    if (h % 2 == 1) {
-        int y = h/2;
-        for (int x = 0; x < w/2; ++x)
-            for (int c = 0; c < 3; ++c)
-                std::swap(rgb[y*stride + x*3 + c], rgb[y*stride + (w-1-x)*3 + c]);
+    if (h & 1) { // middle row if odd height
+        int y = h / 2;
+        for (int x = 0; x < w / 2; ++x) {
+            size_t a = (size_t)y * stride + (size_t)x       * bpp;
+            size_t b = (size_t)y * stride + (size_t)(w-1-x) * bpp;
+            for (int c = 0; c < bpp; ++c) std::swap(px[a + c], px[b + c]);
+        }
     }
 }
 
-static void rotate_rgb_90cw(std::vector<uint8_t>& rgb, int& w, int& h) {
-    std::vector<uint8_t> out(static_cast<size_t>(w) * static_cast<size_t>(h) * 3);
-    int nw = h;
+static void rotate_px_90cw(std::vector<uint8_t>& px, int& w, int& h, int bpp) {
+    const int nw = h, nh = w;
+    std::vector<uint8_t> out((size_t)nw * nh * bpp);
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
-            int nx = h - 1 - y, ny = x;
-            for (int c = 0; c < 3; ++c)
-                out[(static_cast<size_t>(ny) * nw + nx) * 3 + c] =
-                    rgb[(static_cast<size_t>(y) * w + x) * 3 + c];
+            int nx = h - 1 - y, ny = x; // (x,y) -> (nx,ny)
+            size_t di = ((size_t)ny * nw + (size_t)nx) * bpp;
+            size_t si = ((size_t)y  * w  + (size_t)x ) * bpp;
+            for (int c = 0; c < bpp; ++c) out[di + c] = px[si + c];
         }
     }
-    rgb.swap(out);
-    std::swap(w, h);
+    px.swap(out);
+    w = nw; h = nh;
 }
 
-static void rotate_rgb_270cw(std::vector<uint8_t>& rgb, int& w, int& h) {
-    std::vector<uint8_t> out(static_cast<size_t>(w) * static_cast<size_t>(h) * 3);
-    int nw = h;
+static void rotate_px_270cw(std::vector<uint8_t>& px, int& w, int& h, int bpp) {
+    const int nw = h, nh = w;
+    std::vector<uint8_t> out((size_t)nw * nh * bpp);
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
-            int nx = y, ny = w - 1 - x;
-            for (int c = 0; c < 3; ++c)
-                out[(static_cast<size_t>(ny) * nw + nx) * 3 + c] =
-                    rgb[(static_cast<size_t>(y) * w + x) * 3 + c];
+            int nx = y, ny = w - 1 - x; // (x,y) -> (nx,ny)
+            size_t di = ((size_t)ny * nw + (size_t)nx) * bpp;
+            size_t si = ((size_t)y  * w  + (size_t)x ) * bpp;
+            for (int c = 0; c < bpp; ++c) out[di + c] = px[si + c];
         }
     }
-    rgb.swap(out);
-    std::swap(w, h);
+    px.swap(out);
+    w = nw; h = nh;
 }
 
 // If exif_orientation found an Orientation tag, use normalize_orientation 
-// and its above helpers to normalize the pixels, so that we can later safely remove
+// and its above helpers to normalize the pixels (bbp = 3 or 4), so that we can later safely remove
 // the EXIF segment from the cover image and have correct orientation with viewers.
 // Minimal mapper: handle 3,6,8 (most common). Add flips (2,4,5,7)...
-static void normalize_orientation(std::vector<uint8_t>& rgb, int& w, int& h, int ori) {
+static void normalize_orientation(std::vector<uint8_t>& px, int& w, int& h, int ori, int bpp) {
     switch (ori) {
-        case 3: rotate_rgb_180(rgb, w, h); break;
-        case 6: rotate_rgb_90cw(rgb, w, h); break;
-        case 8: rotate_rgb_270cw(rgb, w, h); break;
-        default: /* 1 or unsupported -> do nothing */ break;
+        case 3: rotate_px_180(px, w, h, bpp);   break; // 180°
+        case 6: rotate_px_90cw(px,  w, h, bpp); break; // 90° CW
+        case 8: rotate_px_270cw(px, w, h, bpp); break; // 270° CW
+        default: break; // 1 or unsupported: no-op
     }
 }
 
@@ -581,9 +586,9 @@ int main(int argc, char** argv) {
     	}
 			
 		constexpr uint32_t 
-			MAX_IMAGE_SIZE_BLUESKY 			= 805 * 1024,		// 805 KB.
-			MAX_IMAGE_SIZE_BEFORE_ENCODE  	= 8 * 1024 * 1024,	// 8 MB.
-			MAX_IMAGE_SIZE_AFTER_ENCODE		= 4 * 1024 * 1024,	// 4 MB.
+			MAX_IMAGE_SIZE_BLUESKY 			= 805  * 1024,					// 805 KB.
+			MAX_IMAGE_SIZE_BEFORE_ENCODE  	= 8    * 1024 * 1024,			// 8 MB.
+			MAX_IMAGE_SIZE_AFTER_ENCODE		= 4    * 1024 * 1024,			// 4 MB.
 			MAX_IMAGE_SIZE_RECOVER_MODE 	= 3ULL * 1024 * 1024 * 1024;	// 3 GB.
 	
 		if (args.mode == Mode::recover && image_file_size > MAX_IMAGE_SIZE_RECOVER_MODE) {
@@ -632,80 +637,94 @@ int main(int argc, char** argv) {
 			std::vector<std::string> platforms_vec { 
 				"X-Twitter", "Tumblr", 
 				"Bluesky. (Only share this \"file-embedded\" JPG image on Bluesky).\n\n You must use the Python script \"bsky_post.py\" (found in the repo src folder)\n to post the image to Bluesky.", 
-				"Mastodon", "Reddit. (Only share this \"file-embedded\" JPG image on Reddit).",
-				"PostImage", "ImgBB", "ImgPile",  "Flickr", 
+				"Mastodon", "Pixelfed", "Reddit. (Only share this \"file-embedded\" JPG image on Reddit).",
+				"PostImage", "ImgBB", "ImgPile",  "Flickr" 
 			};
 				
-			/*
-			To improve compatibility,default re-encode image.
-			The following code takes the JPG cover image already loaded into image_file_vec, decodes it with libjpeg-turbo, then re-encodes it with different settings
-			depending on argument option settings. It starts by creating a decompressor (tjInitDecompress) and reading the JPG header (tjDecompressHeader3) to get 
-			image width & height, chroma subsampling, and colorspace; Failure throws with a readable error.
+			/* 	To improve compatibility,default re-encode image.
+				The following code takes the JPG cover image already loaded into image_file_vec, decodes it with libjpeg-turbo, then re-encodes it with different settings
+				depending on argument option settings. It starts by creating a decompressor (tjInitDecompress) and reading the JPG header (tjDecompressHeader3) to get 
+				image width & height, chroma subsampling, and colorspace; Failure throws with a readable error.
 			
-			It allocates an RGB buffer of width * height * 3 bytes and decompresses the JPG into that buffer via tjDecompress2.
+				It allocates an XBGR buffer of width * height * 4 bytes (BYTES_PER_PIXEL) and decompresses the JPG into that buffer via tjDecompress2.
+				Using 4-byte pixel layout (XBGR) only for the in-memory buffer, provides simpler, naturally aligned 32-bit pixels.
+				Slightly cleaner/faster memory access and easy stride = width*4, avoids costly channel-swizzle steps.
 			
-			Call the exif_orientation function to first check for an EXIF segment, then search it for an Orientation tag. 
-			If found, use normalize_orientation and its helpers to normalize the pixels, so that when we later remove the EXIF segment, 
-			viewers should still dislpay the image with correct orientation.
+				Call the exif_orientation function to first check for an EXIF segment, then search it for an Orientation tag. 
+				If found, use normalize_orientation and its helpers to normalize the pixels, so that when we later remove the EXIF segment, 
+				viewers should still display the image with correct orientation.
 			
-			For re-encode, it chooses a quality (85 for Bluesky option; 97 for anything else), a subsampling mode (space-saving 4:2:0 for Bluesky; full-quality 4:4:4 for anything else),
-			flags: progressive JPGs default, and a DCT speed/quality tradeoff where high quality uses TJFLAG_FASTDCT (faster and fine at ≥90) and lower quality (Bluesky) 
-			uses TJFLAG_ACCURATEDCT (slower, slightly more precise). 
+				For re-encode, it chooses a quality (85 for Bluesky option; 97 for anything else), a subsampling mode (space-saving 4:2:0 for Bluesky; full-quality 4:4:4 for anything else),
+				flags: progressive JPGs default and a DCT setting where high quality uses TJFLAG_ACCURATEDCT and lower quality (Bluesky) uses TJFLAG_FASTDCT. 
 			
-			The new, re-encoded image is stored in a temporary vector before it is swapped into vector image_file_vec, 
-			replacing the old cover image. Temporary vectors are cleared to free memory. 
+				The new, re-encoded image is stored in a temporary vector before it is swapped back into vector image_file_vec, 
+				replacing the old cover image. Temporary vectors are cleared to free memory. 
 			*/
 
 			tjhandle decompressor = tjInitDecompress();
 			if (!decompressor) throw std::runtime_error("tjInitDecompress() failed.");
 
 			int width = 0, height = 0, jpegSubsamp = 0, jpegColorspace = 0;
-		
-			if (tjDecompressHeader3(decompressor, image_file_vec.data(), (unsigned long)image_file_vec.size(), &width, &height, &jpegSubsamp, &jpegColorspace) != 0) {
-    			tjDestroy(decompressor);
-    			throw std::runtime_error(std::string("tjDecompressHeader3: ") + tjGetErrorStr());
-			}
 
-			std::vector<uint8_t> decoded_image_vec((size_t)width * (size_t)height * 3);
-			if (tjDecompress2(decompressor, image_file_vec.data(), (unsigned long)image_file_vec.size(), decoded_image_vec.data(), width, 0, height, TJPF_RGB, 0) != 0) {
+			const unsigned char* JPG_IN =
+    		reinterpret_cast<const unsigned char*>(image_file_vec.data());
+
+			if (tjDecompressHeader3(decompressor, JPG_IN, static_cast<unsigned long>(image_file_vec.size()), &width, &height, &jpegSubsamp, &jpegColorspace) != 0) {
+    			std::string err = tjGetErrorStr2(decompressor);
     			tjDestroy(decompressor);
-    			throw std::runtime_error(std::string("tjDecompress2: ") + tjGetErrorStr());
+    			throw std::runtime_error(std::string("tjDecompressHeader3: ") + err);
 			}
 			
+			const int
+				PIXEL_FORMAT   = TJPF_XBGR,                 // 4 BPP with padding byte
+				BYTES_PER_PIXEL = tjPixelSize[PIXEL_FORMAT]; // == 4
+			
+			std::vector<uint8_t> decoded_image_vec(static_cast<size_t>(width) * static_cast<size_t>(height) * static_cast<size_t>(BYTES_PER_PIXEL));
+
+			if (tjDecompress2(decompressor, JPG_IN, static_cast<unsigned long>(image_file_vec.size()), reinterpret_cast<unsigned char*>(decoded_image_vec.data()), width, 0, height, PIXEL_FORMAT, 0) != 0) {
+    			std::string err = tjGetErrorStr2(decompressor);
+    			tjDestroy(decompressor);
+    			throw std::runtime_error(std::string("tjDecompress2: ") + err);
+			}
+	
 			auto ori = exif_orientation(image_file_vec);
 			if (ori && *ori != 1) {
-    			normalize_orientation(decoded_image_vec, width, height, *ori);
+    			normalize_orientation(decoded_image_vec, width, height, *ori, BYTES_PER_PIXEL); 
 			}
-			
+
 			tjDestroy(decompressor);
 
 			const bool isBluesky = (args.option == Option::Bluesky);
-			const int JPG_QUALITY_VAL = isBluesky ? 85 : 97;
 
-			const int subsamp = isBluesky ? TJSAMP_420 : TJSAMP_444;
-			int flags = 0;
-			if (!isBluesky) flags |= TJFLAG_PROGRESSIVE; 
-		
-			flags |= (JPG_QUALITY_VAL >= 90 ? TJFLAG_FASTDCT : TJFLAG_ACCURATEDCT);
+			const int
+   	 			JPG_QUALITY_VAL = isBluesky ? 85 : 97,
+    			SUBSAMP         = isBluesky ? TJSAMP_420 : TJSAMP_444;
+
+			int flags = (isBluesky ? 0 : TJFLAG_PROGRESSIVE) | (JPG_QUALITY_VAL >= 90 ? TJFLAG_ACCURATEDCT : TJFLAG_FASTDCT);
 
 			tjhandle compressor = tjInitCompress();
 			if (!compressor) throw std::runtime_error("tjInitCompress() failed.");
 
-			uint8_t* jpegBuf = nullptr;
-			unsigned long jpegSize = 0;
+			unsigned char* jpegBuf = nullptr;
+			unsigned long  jpegSize = 0;
 
-			if (tjCompress2(compressor, decoded_image_vec.data(), width, 0, height, TJPF_RGB, &jpegBuf, &jpegSize, subsamp, JPG_QUALITY_VAL, flags) != 0) {
+			if (tjCompress2(compressor, reinterpret_cast<unsigned char*>(decoded_image_vec.data()), width, 0, height, PIXEL_FORMAT, &jpegBuf, &jpegSize, SUBSAMP, JPG_QUALITY_VAL, flags) != 0) {
+    			if (jpegBuf) { tjFree(jpegBuf); jpegBuf = nullptr; }
+    			std::string err = tjGetErrorStr2(compressor);
     			tjDestroy(compressor);
-    			throw std::runtime_error(std::string("tjCompress2: ") + tjGetErrorStr());
-			}	
-			tjDestroy(compressor);
+    			throw std::runtime_error(std::string("tjCompress2: ") + err);
+			}
 
 			std::vector<uint8_t> output_image_vec(jpegBuf, jpegBuf + jpegSize);
+
 			tjFree(jpegBuf);
+			tjDestroy(compressor);
 
 			image_file_vec.swap(output_image_vec);
+
 			std::vector<uint8_t>().swap(output_image_vec);
 			std::vector<uint8_t>().swap(decoded_image_vec);
+			
 			// ------------
 					
 			// Save some more space:
@@ -746,8 +765,6 @@ int main(int argc, char** argv) {
 			// ------------
 
 			image_file_size = image_file_vec.size();  // Get updated cover image size after image re-encode, removing superfluous segments & trailing data.
-			
-			std::cout << (int)image_file_size << '\n';
 			
 			if (image_file_size > MAX_IMAGE_SIZE_AFTER_ENCODE) {
 				throw std::runtime_error("Image File Error: Cover image file exceeds maximum size limit.");
@@ -916,9 +933,9 @@ int main(int argc, char** argv) {
 			}
 			
 			constexpr uint32_t 
-				MAX_SIZE_CONCEAL 		= 2ULL * 1024 * 1024 * 1024,  	
-				MAX_SIZE_REDDIT 		= 20 * 1024 * 1024,   
-				MAX_DATA_SIZE_BLUESKY 	= 2 * 1024 * 1024;
+				MAX_SIZE_CONCEAL 		= 2ULL * 1024 * 1024 * 1024,  	// 3 GB.
+				MAX_SIZE_REDDIT 		= 20   * 1024 * 1024,   		// 20 MB.
+				MAX_DATA_SIZE_BLUESKY 	= 2    * 1024 * 1024;			// 2 MB. 
 				
 			const uintmax_t COMBINED_FILE_SIZE = data_file_size + image_file_size;
 
@@ -1354,10 +1371,10 @@ int main(int argc, char** argv) {
 					image_file_vec.insert(image_file_vec.begin(), IMAGE_START_SIG.begin(), IMAGE_START_SIG.end());
 					image_file_vec.insert(image_file_vec.end() - 2, 8000, 0x23);
 					image_file_vec.insert(image_file_vec.end() - 2, data_file_vec.begin() + 2, data_file_vec.end());
-					platforms_vec[0] = std::move(platforms_vec[4]);
+					platforms_vec[0] = std::move(platforms_vec[5]);
 					platforms_vec.resize(1);
 				} else {
-					platforms_vec.erase(platforms_vec.begin() + 4); 
+					platforms_vec.erase(platforms_vec.begin() + 5); 
 					platforms_vec.erase(platforms_vec.begin() + 2);
 					image_file_vec.insert(image_file_vec.begin(), data_file_vec.begin(), data_file_vec.end());
 				}
@@ -1383,13 +1400,14 @@ int main(int argc, char** argv) {
 				constexpr uint32_t 
 					FLICKR_MAX_IMAGE_SIZE 			= 200 * 1024 * 1024,
 					IMGPILE_MAX_IMAGE_SIZE 			= 100 * 1024 * 1024,
-					IMGBB_POSTIMAGE_MAX_IMAGE_SIZE 	= 32 * 1024 * 1024,
-					MASTODON_MAX_IMAGE_SIZE 		= 16 * 1024 * 1024,
-					TWITTER_MAX_IMAGE_SIZE 			= 5 * 1024 * 1024;
+					IMGBB_POSTIMAGE_MAX_IMAGE_SIZE 	= 32  * 1024 * 1024,
+					MASTODON_MAX_IMAGE_SIZE 		= 16  * 1024 * 1024,
+				    PIXELFED_MAX_IMAGE_SIZE 		= 15  * 1024 * 1024,
+					TWITTER_MAX_IMAGE_SIZE 			= 5   * 1024 * 1024;
 					
 				constexpr uint16_t 
 					TWITTER_MAX_DATA_SIZE 	= 10 * 1024,
-					TUMBLR_MAX_DATA_SIZE 	=  64 * 1024 - 2;
+					TUMBLR_MAX_DATA_SIZE 	= 64 * 1024 - 2;
 					
 				const uint16_t
 					FIRST_SEGMENT_SIZE	= (image_file_vec[0x04] << 8) | image_file_vec[0x05],
@@ -1409,6 +1427,9 @@ int main(int argc, char** argv) {
     				if (platform == "Mastodon" && (TOTAL_SEGMENTS > MASTODON_MAX_SEGMENTS || IMAGE_SIZE > MASTODON_MAX_IMAGE_SIZE)) {
         				continue;
     				}
+					if (platform == "Pixelfed" && IMAGE_SIZE > PIXELFED_MAX_IMAGE_SIZE) {
+						continue;
+					}
     				if ((platform == "ImgBB" || platform == "PostImage") && (IMAGE_SIZE > IMGBB_POSTIMAGE_MAX_IMAGE_SIZE)) {
         				continue;
     				}
@@ -1450,7 +1471,8 @@ int main(int argc, char** argv) {
 				ICC_PROFILE_SIG	{ 0x6D, 0x6E, 0x74, 0x72, 0x52, 0x47, 0x42 };
 			
 			auto index_opt = searchSig(image_file_vec, std::span<const uint8_t>(JDVRIF_SIG));
-			if (index_opt == image_file_vec.size()) {
+				
+			if (!index_opt) {
 				throw std::runtime_error("Image File Error: Signature check failure. This is not a valid jdvrif \"file-embedded\" image.");
 			}
 			
