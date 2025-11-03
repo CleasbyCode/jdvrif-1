@@ -1,4 +1,4 @@
-// JPG Data Vehicle (jdvrif v5.7) Created by Nicholas Cleasby (@CleasbyCode) 10/04/2023
+// JPG Data Vehicle (jdvrif v5.8) Created by Nicholas Cleasby (@CleasbyCode) 10/04/2023
 
 // Compile program (Linux):
 
@@ -75,7 +75,6 @@
 #include <fstream> 
 #include <iostream>
 #include <iterator> 
-#include <limits>
 #include <optional>
 #include <random> 
 #include <span>
@@ -90,7 +89,7 @@ namespace fs = std::filesystem;
 static void displayInfo() {
 	std::cout << R"(
 
-JPG Data Vehicle (jdvrif v5.7)
+JPG Data Vehicle (jdvrif v5.8)
 Created by Nicholas Cleasby (@CleasbyCode) 24/01/2023
 
 jdvrif is a metadata “steganography-like” command-line tool used for concealing and extracting
@@ -228,11 +227,11 @@ struct ProgramArgs {
 			return (i >= 0 && i < argc) ? string_view(argv[i]) : string_view{};
         };
 
-        const std::string prog = fs::path(argv[0]).filename().string();
-        const std::string USAGE =
-        	"Usage: " + prog + " conceal [-b|-r] <cover_image> <secret_file>\n\t\b"
-            + prog + " recover <cover_image>\n\t\b"
-            + prog + " --info";
+        const std::string
+			PROG = fs::path(argv[0]).filename().string(),
+        	USAGE = "Usage: " + PROG + " conceal [-b|-r] <cover_image> <secret_file>\n\t\b"
+            	+ PROG + " recover <cover_image>\n\t\b"
+            	+ PROG + " --info";
 
         auto die = [&]() -> void {
         	throw std::runtime_error(USAGE);
@@ -247,10 +246,10 @@ struct ProgramArgs {
 
         ProgramArgs out{};
 
-        const string_view cmd = arg(1);
+        const string_view MODE = arg(1);
 
-        if (cmd == "conceal") {
-        	int i = 2;
+        if (MODE == "conceal") {
+        	uint8_t i = 2;
             if (arg(i) == "-b" || arg(i) == "-r") {
         		out.option = (arg(i) == "-b") ? Option::Bluesky : Option::Reddit;
             	++i;
@@ -262,7 +261,7 @@ struct ProgramArgs {
             out.mode = Mode::conceal;
             return out;
         }
-        if (cmd == "recover") {
+        if (MODE == "recover") {
         	if (argc != 3) die();
         	out.image_file_path = fs::path(arg(2));
         	out.mode = Mode::recover;
@@ -288,36 +287,36 @@ static std::optional<size_t> searchSig(const std::vector<uint8_t>& v, std::span<
 // First search for an EXIF segment, if found search for an Orientation tag.
 // Returns 1..8 if found and passed to normalize_orientation, or std::nullopt if no EXIF/Orientation.
 static std::optional<uint16_t> exif_orientation(const std::vector<uint8_t>& jpg) {
-    const uint8_t APP1[] = {0xFF, 0xE1};
-    auto app1 = searchSig(jpg, std::span<const uint8_t>(APP1, 2));
-    if (!app1) return std::nullopt;
+    const uint8_t APP1_SIG[] = {0xFF, 0xE1};
+    auto app1_opt = searchSig(jpg, std::span<const uint8_t>(APP1_SIG, 2));
+    if (!app1_opt) return std::nullopt;
 
-    size_t p = *app1;
-    if (p + 4 > jpg.size()) return std::nullopt;
+    size_t app1_pos = *app1_opt;
+    if (app1_pos + 4 > jpg.size()) return std::nullopt;
 
-    uint16_t len = (static_cast<uint16_t>(jpg[p+2]) << 8) | jpg[p+3];
-    size_t exif_end = p + 2 + len;            
+    uint16_t length = (static_cast<uint16_t>(jpg[app1_pos+2]) << 8) | jpg[app1_pos+3];
+    size_t exif_end = app1_pos + 2 + length;            
     if (exif_end > jpg.size()) return std::nullopt;
 
-    size_t exif_start = p + 4;
+    size_t exif_start = app1_pos + 4;
     if (exif_start + 6 > exif_end) return std::nullopt;
     if (std::memcmp(&jpg[exif_start], "Exif\0\0", 6) != 0) return std::nullopt;
 
     size_t tiff = exif_start + 6;
     if (tiff + 8 > exif_end) return std::nullopt;
 
-    bool le = false;
-    if (jpg[tiff] == 'I' && jpg[tiff+1] == 'I') le = true;
-    else if (jpg[tiff] == 'M' && jpg[tiff+1] == 'M') le = false;
+    bool isLittleEndian = false;
+    if (jpg[tiff] == 'I' && jpg[tiff+1] == 'I') isLittleEndian = true;
+    else if (jpg[tiff] == 'M' && jpg[tiff+1] == 'M') isLittleEndian = false;
     else return std::nullopt;
 
     auto rd16 = [&](size_t off) -> uint16_t {
         if (off + 1 >= exif_end) return 0;
-        return le ? (uint16_t)(jpg[off] | (jpg[off+1] << 8)) : (uint16_t)((jpg[off] << 8) | jpg[off+1]);
+        return isLittleEndian ? (uint16_t)(jpg[off] | (jpg[off+1] << 8)) : (uint16_t)((jpg[off] << 8) | jpg[off+1]);
     };
     auto rd32 = [&](size_t off) -> uint32_t {
         if (off + 3 >= exif_end) return 0;
-        return le ? (uint32_t)(jpg[off] | (jpg[off+1] << 8) | (jpg[off+2] << 16) | (jpg[off+3] << 24)) : (uint32_t)((jpg[off] << 24) | (jpg[off+1] << 16) | (jpg[off+2] << 8) | jpg[off+3]);
+        return isLittleEndian ? (uint32_t)(jpg[off] | (jpg[off+1] << 8) | (jpg[off+2] << 16) | (jpg[off+3] << 24)) : (uint32_t)((jpg[off] << 24) | (jpg[off+1] << 16) | (jpg[off+2] << 8) | jpg[off+3]);
     };
 
     if (rd16(tiff + 2) != 0x002A) return std::nullopt;
@@ -340,53 +339,53 @@ static std::optional<uint16_t> exif_orientation(const std::vector<uint8_t>& jpg)
 
 // Generic rotate helpers for bpp = 3 or 4
 static void rotate_px_180(std::vector<uint8_t>& px, int w, int h, int bpp) {
-    const size_t stride = (size_t)w * bpp;
+    const size_t STRIDE = (size_t)w * bpp;
     for (int y = 0; y < h / 2; ++y) {
         int opp = h - 1 - y;
         for (int x = 0; x < w; ++x) {
-            size_t a = (size_t)y   * stride + (size_t)x        * bpp;
-            size_t b = (size_t)opp * stride + (size_t)(w-1-x)  * bpp;
+            size_t a = (size_t)y   * STRIDE + (size_t)x        * bpp;
+            size_t b = (size_t)opp * STRIDE + (size_t)(w-1-x)  * bpp;
             for (int c = 0; c < bpp; ++c) std::swap(px[a + c], px[b + c]);
         }
     }
     if (h & 1) { // middle row if odd height
         int y = h / 2;
         for (int x = 0; x < w / 2; ++x) {
-            size_t a = (size_t)y * stride + (size_t)x       * bpp;
-            size_t b = (size_t)y * stride + (size_t)(w-1-x) * bpp;
+            size_t a = (size_t)y * STRIDE + (size_t)x       * bpp;
+            size_t b = (size_t)y * STRIDE + (size_t)(w-1-x) * bpp;
             for (int c = 0; c < bpp; ++c) std::swap(px[a + c], px[b + c]);
         }
     }
 }
 
 static void rotate_px_90cw(std::vector<uint8_t>& px, int& w, int& h, int bpp) {
-    const int nw = h, nh = w;
-    std::vector<uint8_t> out((size_t)nw * nh * bpp);
+    const int NW = h, NH = w;	// Clockwise rotation swaps width/height.
+    std::vector<uint8_t> out((size_t)NW * NH * bpp);
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
             int nx = h - 1 - y, ny = x; // (x,y) -> (nx,ny)
-            size_t di = ((size_t)ny * nw + (size_t)nx) * bpp;
+            size_t di = ((size_t)ny * NW + (size_t)nx) * bpp;
             size_t si = ((size_t)y  * w  + (size_t)x ) * bpp;
             for (int c = 0; c < bpp; ++c) out[di + c] = px[si + c];
         }
     }
     px.swap(out);
-    w = nw; h = nh;
+    w = NW; h = NH;
 }
 
 static void rotate_px_270cw(std::vector<uint8_t>& px, int& w, int& h, int bpp) {
-    const int nw = h, nh = w;
-    std::vector<uint8_t> out((size_t)nw * nh * bpp);
+    const int NW = h, NH = w;	// Clockwise rotation swaps width/height.
+    std::vector<uint8_t> out((size_t)NW * NH * bpp);
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
             int nx = y, ny = w - 1 - x; // (x,y) -> (nx,ny)
-            size_t di = ((size_t)ny * nw + (size_t)nx) * bpp;
+            size_t di = ((size_t)ny * NW + (size_t)nx) * bpp;
             size_t si = ((size_t)y  * w  + (size_t)x ) * bpp;
             for (int c = 0; c < bpp; ++c) out[di + c] = px[si + c];
         }
     }
     px.swap(out);
-    w = nw; h = nh;
+    w = NW; h = NH;
 }
 
 // If exif_orientation found an Orientation tag, use normalize_orientation 
@@ -429,8 +428,8 @@ static bool hasValidFilename(const fs::path& p) {
 static bool hasFileExtension(const fs::path& p, std::initializer_list<const char*> exts) {
 	auto e = p.extension().string();
     std::transform(e.begin(), e.end(), e.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
-    for (const char* cand : exts) {
-    	std::string c = cand;
+    for (const char* CAND : exts) {
+    	std::string c = CAND;
         std::transform(c.begin(), c.end(), c.begin(), [](unsigned char x){ return static_cast<char>(std::tolower(x)); });
         if (e == c) return true;
     }
@@ -438,7 +437,7 @@ static bool hasFileExtension(const fs::path& p, std::initializer_list<const char
 }
 
 // Zlib function, deflate or inflate data file within vector.
-static void zlibFunc(std::vector<uint8_t>& vec, Mode mode, bool& isCompressedFile) {
+static void zlibFunc(std::vector<uint8_t>& vec, Mode mode) {
 	constexpr uint32_t BUFSIZE = 2 * 1024 * 1024; 
 	const uint32_t VEC_SIZE = static_cast<uint32_t>(vec.size());
 	
@@ -453,23 +452,7 @@ static void zlibFunc(std::vector<uint8_t>& vec, Mode mode, bool& isCompressedFil
     strm.avail_out = BUFSIZE;
 
     if (mode == Mode::conceal) {
-    	auto select_compression_level = [](uint32_t vec_size, bool isCompressedFile) -> int {
-    		constexpr uint32_t 
-    			FIFTH_SIZE_OPTION   = 750 * 1024 * 1024,
-    			FOURTH_SIZE_OPTION  = 450 * 1024 * 1024,
-    			THIRD_SIZE_OPTION   = 250 * 1024 * 1024,
-    			SECOND_SIZE_OPTION  = 150 * 1024 * 1024,
-    			FIRST_SIZE_OPTION   = 10  * 1024 * 1024;
-    					
-    		if (isCompressedFile || vec_size >= FIFTH_SIZE_OPTION) return Z_NO_COMPRESSION;
-    		if (vec_size >= FOURTH_SIZE_OPTION) return Z_BEST_SPEED;
-    		if (vec_size >= THIRD_SIZE_OPTION)  return Z_DEFAULT_COMPRESSION;
-    		if (vec_size >= SECOND_SIZE_OPTION) return Z_BEST_COMPRESSION;
-    		if (vec_size >= FIRST_SIZE_OPTION)  return Z_DEFAULT_COMPRESSION;
-    		return Z_BEST_COMPRESSION;
-		};
-        
-        int compression_level = select_compression_level(VEC_SIZE, isCompressedFile);
+        int compression_level = Z_BEST_COMPRESSION;
 
         if (deflateInit(&strm, compression_level)  != Z_OK) {
         	throw std::runtime_error("Zlib Deflate Init Error");
@@ -631,6 +614,8 @@ int main(int argc, char** argv) {
 		
         constexpr uint32_t LARGE_FILE_SIZE = 300 * 1024 * 1024;
        	const std::string LARGE_FILE_MSG = "\nPlease wait. Larger files will take longer to complete this process.\n";
+       
+       	constexpr uint8_t NO_COMPRESSION_MARKER = 0x58;
         	
         if (args.mode == Mode::conceal) {                                    
 			// Embed data file section code.
@@ -652,13 +637,15 @@ int main(int argc, char** argv) {
 			
 				Call the exif_orientation function to first check for an EXIF segment, then search it for an Orientation tag. 
 				If found, use normalize_orientation and its helpers to normalize the pixels, so that when we later remove the EXIF segment, 
-				viewers should still display the image with correct orientation.
+				image viewers should still display it with correct orientation.
 			
-				For re-encode, it chooses a quality (85 for Bluesky option; 97 for anything else), a subsampling mode (space-saving 4:2:0 for Bluesky; full-quality 4:4:4 for anything else),
-				flags: progressive JPGs default and a DCT setting where high quality uses TJFLAG_ACCURATEDCT and lower quality (Bluesky) uses TJFLAG_FASTDCT. 
+				For re-encode, it chooses a quality 97 for default, no platform option or 85 with option -b or -r, 
+				a subsampling mode: space-saving 4:2:0 for Bluesky & Reddit or the original subsampling for default, no option.
+				
+				Flags: Image compression mode Progressive JPG default (no option) and a DCT setting where high image quality uses TJFLAG_ACCURATEDCT
+				and Baseline compression mode with lower quality for Bluesky & Reddit (-b, -r), uses TJFLAG_FASTDCT. 
 			
-				The new, re-encoded image is stored in a temporary vector before it is swapped back into vector image_file_vec, 
-				replacing the old cover image. Temporary vectors are cleared to free memory. 
+				The new, re-encoded image is stored in a temporary vector before it is swapped back into vector image_file_vec, replacing the old cover image. Temporary vectors are cleared to free memory. 
 			*/
 
 			tjhandle decompressor = tjInitDecompress();
@@ -694,13 +681,13 @@ int main(int argc, char** argv) {
 
 			tjDestroy(decompressor);
 
-			const bool isBluesky = (args.option == Option::Bluesky);
+			bool hasNoOption = (args.option == Option::None);
 
 			const int
-   	 			JPG_QUALITY_VAL = isBluesky ? 85 : 97,
-    			SUBSAMP         = isBluesky ? TJSAMP_420 : TJSAMP_444;
+   	 			JPG_QUALITY_VAL = hasNoOption ? 97 : 85,
+    				SUBSAMP         = hasNoOption ? jpegSubsamp : TJSAMP_420;
 
-			int flags = (isBluesky ? 0 : TJFLAG_PROGRESSIVE) | (JPG_QUALITY_VAL >= 90 ? TJFLAG_ACCURATEDCT : TJFLAG_FASTDCT);
+			int flags = (hasNoOption ? TJFLAG_PROGRESSIVE : 0) | (JPG_QUALITY_VAL >= 90 ? TJFLAG_ACCURATEDCT : TJFLAG_FASTDCT);
 
 			tjhandle compressor = tjInitCompress();
 			if (!compressor) throw std::runtime_error("tjInitCompress() failed.");
@@ -766,6 +753,8 @@ int main(int argc, char** argv) {
 
 			image_file_size = image_file_vec.size();  // Get updated cover image size after image re-encode, removing superfluous segments & trailing data.
 			
+			bool isBluesky = (args.option == Option::Bluesky);
+			
 			if (image_file_size > MAX_IMAGE_SIZE_AFTER_ENCODE) {
 				throw std::runtime_error("Image File Error: Cover image file exceeds maximum size limit.");
 			}
@@ -815,7 +804,8 @@ int main(int argc, char** argv) {
 			data_file_ifs.close();
 								
 			// ICC color profile segment (FFE2). Default method for storing data file (in multiple segments, if required).
-			// Notes: 	Total segments value index = 0x2E0 (2 bytes)
+			// Notes: 	Compression marker index = 0x80 (1 byte). If data file already compressed, insert byte X (0x58). Skips both Zlib deflate (conceal mode) & Zlib inflate (recover mode).
+			//			Total segments value index = 0x2E0 (2 bytes)
 			//			Compressed data file size index = 0x2E2	(4 bytes)
 			//			Data filename length index = 0x2E6 (1 byte)
 			//			Data filename index = 0x2E7 (20 bytes)
@@ -865,7 +855,8 @@ int main(int argc, char** argv) {
 			};
 
 			// EXIF (FFE1) segment. This is the way we store the data file when user selects the -b option switch for Bluesky platform. 
-			// Notes: 	Total segments value index = N/A
+			// Notes: 	Compression marker index = 0x14B (1 byte). If data file already compressed, insert byte X (0x58). Skips both Zlib deflate (conceal mode) & Zlib inflate (recover mode).
+			//			Total segments value index = N/A
 			//			Compressed data file size index = 0x1CD	(4 bytes)
 			//			Data filename length index = 0x160 (1 byte)
 			//			Data filename index = 0x161 (20 bytes)
@@ -922,9 +913,15 @@ int main(int argc, char** argv) {
 			const uint16_t DATA_FILENAME_LENGTH_INDEX = (isBluesky) ? 0x160 : 0x2E6;
 
 			segment_vec[DATA_FILENAME_LENGTH_INDEX] = static_cast<uint8_t>(data_filename.size());	 
-
-			// Deflate data file with Zlib.
-			zlibFunc(data_file_vec, args.mode, isCompressedFile);
+			
+			if (isCompressedFile) {
+				// Skip Zlib deflate. Data file already compressed.
+				uint16_t no_compression_marker_index = (isBluesky) ? 0x14B : 0x80;
+				segment_vec[no_compression_marker_index] = NO_COMPRESSION_MARKER; // ID byte for recovery mode. Will skip Zlib inflate.
+			} else {
+				// Deflate data file with Zlib.
+				zlibFunc(data_file_vec, args.mode);
+			}
 			
 			data_file_size = data_file_vec.size();
 			
@@ -938,16 +935,18 @@ int main(int argc, char** argv) {
 				MAX_DATA_SIZE_BLUESKY 	= 2    * 1024 * 1024;			// 2 MB. 
 				
 			const uintmax_t COMBINED_FILE_SIZE = data_file_size + image_file_size;
-
+			
+			bool isReddit = (args.option == Option::Reddit); 
+			
 			if (isBluesky && data_file_size > MAX_DATA_SIZE_BLUESKY) {
 				throw std::runtime_error("Data File Size Error: File exceeds maximum size limit for the Bluesky platform.");
 			}
 
-   			if (args.option == Option::Reddit && COMBINED_FILE_SIZE > MAX_SIZE_REDDIT) {
+   			if (isReddit && COMBINED_FILE_SIZE > MAX_SIZE_REDDIT) {
    				throw std::runtime_error("File Size Error: Combined size of image and data file exceeds maximum size limit for the Reddit platform.");
    			}
 
-			if (args.option == Option::None && COMBINED_FILE_SIZE > MAX_SIZE_CONCEAL) {
+			if (hasNoOption && COMBINED_FILE_SIZE > MAX_SIZE_CONCEAL) {
 				throw std::runtime_error("File Size Error: Combined size of image and data file exceeds maximum default size limit for jdvrif.");
 			}
 			
@@ -1359,14 +1358,14 @@ int main(int argc, char** argv) {
 
 				constexpr uint16_t 
 					DEFLATED_DATA_FILE_SIZE_INDEX = 0x2E2,	// The size value stored here is used by jdvout when extracting the data file.
-					ICC_PROFILE_DATA_SIZE = 851; // Color profile data size, not including user data file size.
+					ICC_PROFILE_DATA_SIZE = 851; 			// Color profile data size, not including user data file size.
 	
 				updateValue(data_file_vec, DEFLATED_DATA_FILE_SIZE_INDEX, static_cast<uint32_t>(data_file_vec.size()) - ICC_PROFILE_DATA_SIZE, value_bit_length);
 				// -------
 		
 				image_file_vec.reserve(image_file_size + data_file_vec.size());	
 					
-				if (args.option == Option::Reddit) {
+				if (isReddit) {
 					static constexpr std::array<uint8_t, 2> IMAGE_START_SIG { 0xFF, 0xD8 };
 					image_file_vec.insert(image_file_vec.begin(), IMAGE_START_SIG.begin(), IMAGE_START_SIG.end());
 					image_file_vec.insert(image_file_vec.end() - 2, 8000, 0x23);
@@ -1396,7 +1395,7 @@ int main(int argc, char** argv) {
 			file_ofs.write(reinterpret_cast<const char*>(image_file_vec.data()), IMAGE_SIZE);
 			file_ofs.close();
 			
-			if (args.option == Option::None) {
+			if (hasNoOption) {
 				constexpr uint32_t 
 					FLICKR_MAX_IMAGE_SIZE 			= 200 * 1024 * 1024,
 					IMGPILE_MAX_IMAGE_SIZE 			= 100 * 1024 * 1024,
@@ -1461,7 +1460,7 @@ int main(int argc, char** argv) {
 			std::cout << "\nRecovery PIN: [***" << pin << "***]\n\nImportant: Keep your PIN safe, so that you can extract the hidden file.\n\nComplete!\n\n";
 			return 0;
         } else {
-			// Recover data file code section.
+			// Recover data file code section. ----------------------------------------------------------------------------
         	constexpr uint8_t 
 				SIG_LENGTH = 7,
 				INDEX_DIFF = 8;
@@ -1480,21 +1479,31 @@ int main(int argc, char** argv) {
 			
 			uint8_t pin_attempts_val = image_file_vec[JDVRIF_SIG_INDEX + INDEX_DIFF - 1];
 			
-			bool hasBlueskyOption = true;
+			bool 
+				hasBlueskyOption = true,
+				isDataCompressed = true;
 			
 			index_opt = searchSig(image_file_vec, std::span<const uint8_t>(ICC_PROFILE_SIG));
 			
 			if (index_opt) {
 				const uint32_t ICC_PROFILE_SIG_INDEX = static_cast<uint32_t>(*index_opt);
+				constexpr uint8_t ICC_COMPRESSION_MARKER_INDEX = 0x68;
+					
 				image_file_vec.erase(image_file_vec.begin(), image_file_vec.begin() + (ICC_PROFILE_SIG_INDEX - INDEX_DIFF));
+				if (image_file_vec[ICC_COMPRESSION_MARKER_INDEX] == NO_COMPRESSION_MARKER) isDataCompressed = false;
+				
 				hasBlueskyOption = false;
 			}
 
-			if (hasBlueskyOption) { // EXIF segment (FFE1) is being used. Check for PHOTOSHOP & XMP segments and their index locations.
+			if (hasBlueskyOption) { // EXIF segment (FFE1) is being used instead of ICC (FFE2). Check for PHOTOSHOP & XMP segments and their index locations.
 				static constexpr std::array<uint8_t, SIG_LENGTH> 
 					PSHOP_SIG 		{ 0x73, 0x68, 0x6F, 0x70, 0x20, 0x33, 0x2E },
 					XMP_SIG 		{ 0x68, 0x74, 0x74, 0x70, 0x3A, 0x2F, 0x2F },
 					XMP_CREATOR_SIG { 0x3C, 0x72, 0x64, 0x66, 0x3A, 0x6C, 0x69 };
+					
+				constexpr uint16_t EXIF_COMPRESSION_MARKER_INDEX = 0x14B;
+				
+				if (image_file_vec[EXIF_COMPRESSION_MARKER_INDEX] == NO_COMPRESSION_MARKER) isDataCompressed = false;
 
 				index_opt = searchSig(image_file_vec, std::span<const uint8_t>(PSHOP_SIG));
 				
@@ -1869,9 +1878,11 @@ int main(int argc, char** argv) {
 					file.close();
 					throw std::runtime_error("File Decryption Error: Invalid recovery PIN or file is corrupt.");
 			}
-	
-			// Inflate data file with Zlib
-			zlibFunc(decrypted_file_vec, args.mode, isCompressedFile);
+			
+			// Inflate data file with Zlib.
+			if (isDataCompressed) {
+				zlibFunc(decrypted_file_vec, args.mode);
+			}
 		
 			const uint32_t INFLATED_FILE_SIZE = static_cast<uint32_t>(decrypted_file_vec.size());
 			// -------------
