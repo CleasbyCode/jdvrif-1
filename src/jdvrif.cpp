@@ -1,4 +1,4 @@
-// JPG Data Vehicle (jdvrif v6.7) Created by Nicholas Cleasby (@CleasbyCode) 10/04/2023
+// JPG Data Vehicle (jdvrif v6.8) Created by Nicholas Cleasby (@CleasbyCode) 10/04/2023
 
 // Compile program (Linux):
 
@@ -96,7 +96,10 @@ using Key   = std::array<Byte, crypto_secretbox_KEYBYTES>;
 using Nonce = std::array<Byte, crypto_secretbox_NONCEBYTES>;
 using Tag   = std::array<Byte, crypto_secretbox_MACBYTES>;
 
-constexpr std::size_t TAG_BYTES = std::tuple_size<Tag>::value;
+constexpr std::size_t 
+	NO_ZLIB_COMPRESSION_ID_INDEX = 0x80ULL,
+	NO_ZLIB_COMPRESSION_ID 		 = 0x58ULL,
+	TAG_BYTES 					 = std::tuple_size<Tag>::value;
 
 enum class Mode   : unsigned char { conceal, recover };
 enum class Option : unsigned char { None, Bluesky, Reddit };
@@ -114,7 +117,7 @@ static constexpr auto view = [](const auto& container) -> std::span<const Byte> 
 static void displayInfo() {
 	std::cout << R"(
 
-JPG Data Vehicle (jdvrif v6.7)
+JPG Data Vehicle (jdvrif v6.8)
 Created by Nicholas Cleasby (@CleasbyCode) 10/04/2023
 
 jdvrif is a metadata “steganography-like” command-line tool used for concealing and extracting
@@ -194,7 +197,7 @@ recover - Decrypts, uncompresses and extracts the concealed data file from a JPG
 Platform options for conceal mode
 ──────────────────────────
 
--b (Bluesky) : Createa compatible “file-embedded” JPG images for posting on Bluesky.
+-b (Bluesky) : Creates compatible “file-embedded” JPG images for posting on Bluesky.
 
 $ jdvrif conceal -b my_image.jpg hidden.doc
 
@@ -447,6 +450,67 @@ struct TJBuffer {
 	~TJBuffer() { if (data) tjFree(data); }
 };
 
+// Standard JPEG Luminance Quantization Table (Quality 50) in ZigZag order
+static constexpr auto STD_LUMA_QTABLE = std::to_array<Byte>({
+	16, 11, 12, 14, 12, 10, 16, 14, 13, 14, 18, 17, 16, 19, 24, 40, 
+    26, 24, 22, 22, 24, 49, 35, 37, 29, 40, 58, 51, 61, 60, 57, 51, 
+    56, 55, 64, 72, 92, 78, 64, 68, 87, 69, 55, 56, 80, 109, 81, 87, 
+    95, 98, 103, 104, 103, 62, 77, 113, 121, 112, 100, 120, 92, 101, 103, 99
+});
+
+static int estimateImageQuality(const vBytes& jpg) {
+	constexpr auto DQT_SIG = std::to_array<Byte>({0xFF, 0xDB});
+    
+    constexpr size_t DQT_SEARCH_LIMIT = 32768;
+
+    auto dqt_pos_opt = searchSig(jpg, std::span<const Byte>(DQT_SIG), DQT_SEARCH_LIMIT);
+    if (!dqt_pos_opt) return 80; 
+
+    std::size_t pos = *dqt_pos_opt;
+
+    if (pos + 4 > jpg.size()) return 80;
+
+    std::size_t 
+		length = (static_cast<std::size_t>(jpg[pos + 2]) << 8) | jpg[pos + 3],
+    	end    = pos + 2 + length;
+    
+    if (end > jpg.size()) return 80;
+
+    pos += 4; 
+
+    while (pos < end) {
+    	if (pos + 65 > end) break; 
+        Byte 
+			header 	  = jpg[pos++],
+        	precision = (header >> 4) & 0x0F,
+        	table_id  = header & 0x0F;
+		
+        if (precision == 0 && table_id == 0) {
+            double total_scale = 0.0;
+            
+            for (size_t i = 0; i < 64; ++i) {
+				double 
+					val = static_cast<double>(jpg[pos + i]),
+                	std = static_cast<double>(STD_LUMA_QTABLE[i]);
+				
+                total_scale += (val * 100.0) / std;
+            }
+        
+            total_scale /= 64.0;
+
+            if (total_scale <= 0.0) return 100;
+            
+            if (total_scale <= 100.0) {
+            	return static_cast<int>(200.0 - total_scale) / 2;
+            } else {
+            	return static_cast<int>(5000.0 / total_scale);
+            }
+        }   
+        pos += 64; 
+    }
+    return 80; 
+}
+
 static void optimizeImage(vBytes& jpg_vec, int& width, int& height) {
 	if (jpg_vec.empty()) {
         throw std::runtime_error("JPG image is empty!");
@@ -463,6 +527,15 @@ static void optimizeImage(vBytes& jpg_vec, int& width, int& height) {
         throw std::runtime_error(std::string("Image Error: ") + tjGetErrorStr2(transformer.get()));
     }
 
+	if (width < 300 && height < 300) {
+        throw std::runtime_error("Image Error: Dimensions are too small.\nFor platform compatibility, cover image must be at least 300px for both width and height.");
+    }
+
+    int estimated_quality = estimateImageQuality(jpg_vec);
+    if (estimated_quality > 97) {
+        throw std::runtime_error("Image Error: Quality too high. For platform compatibility, cover image quality must be 97 or lower.");
+    }
+	
     auto ori_opt = exifOrientation(jpg_vec);
     int xop = TJXOP_NONE;
     
@@ -866,7 +939,7 @@ static void base64ToBinary(vBytes& base64_data_vec, vBytes& pshop_tmp_vec) {
     };
 
     vBytes binary_vec;
-    binary_vec.reserve((input_size / 4) * 3);  
+    binary_vec.reserve(pshop_tmp_vec.size());  
 
     for (std::size_t i = 0; i < input_size; i += 4) {
     	const unsigned char 
@@ -902,8 +975,7 @@ static void base64ToBinary(vBytes& base64_data_vec, vBytes& pshop_tmp_vec) {
         if (!p2) binary_vec.emplace_back(static_cast<Byte>((triple >> 8) & 0xFF));
         if (!p3) binary_vec.emplace_back(static_cast<Byte>(triple & 0xFF));
     }
-    // Append to output
-    pshop_tmp_vec.reserve(pshop_tmp_vec.size() + binary_vec.size());
+    // Append binary data to the other recovered segments of the data file. This should now be the complete file.
     pshop_tmp_vec.insert(pshop_tmp_vec.end(), binary_vec.begin(), binary_vec.end());
 }
 								
@@ -1504,7 +1576,8 @@ static int concealData(vBytes& jpg_vec, Mode mode, Option option, fs::path& data
     if (data_filename.size() > DATA_FILENAME_MAX_LENGTH) {
         throw std::runtime_error("Data File Error: For compatibility requirements, length of data filename must not exceed 20 characters.");
     }
-  
+	
+  	// Is data file greater than 10MB and matches one of these file extensions?
     isCompressedFile = data_size > 10ULL * 1024 * 1024 && hasFileExtension(data_file_path, {".zip",".jar",".rar",".7z",".bz2",".gz",".xz",".tar",".lz",".lz4",".cab",".rpm",".deb", ".mp4",".mp3",".exe",".jpg",".jpeg",".jfif",".png",".webp",".bmp",".gif",".ogg",".flac"});
                                                 
   	// ICC color profile segment (FFE2). Default method for storing data file (in multiple segments, if required).
@@ -1620,11 +1693,11 @@ static int concealData(vBytes& jpg_vec, Mode mode, Option option, fs::path& data
     }
             
     if (isCompressedFile) {
-        std::size_t no_compression_marker_index = (hasBlueskyOption) ? 0x14BULL : 0x80ULL;
-        segment_vec[no_compression_marker_index] = 0x58ULL; 
+    	// Data file meets criteria for "already compressed", so skip zlib function and mark cover image so zlib will also be skipped during recovery.
+    	segment_vec[NO_ZLIB_COMPRESSION_ID_INDEX] = NO_ZLIB_COMPRESSION_ID; 
     } else {
-        zlibFunc(data_vec, mode);
-        data_size = data_vec.size(); 
+    	zlibFunc(data_vec, mode);
+    	data_size = data_vec.size(); 
     }
    
     constexpr std::size_t 
@@ -1763,14 +1836,14 @@ static int recoverData(vBytes& jpg_vec, Mode mode, fs::path& image_file_path) {
 	index_opt = searchSig(jpg_vec, std::span<const Byte>(ICC_PROFILE_SIG));
 	
 	if (index_opt) {
-		const std::size_t ICC_PROFILE_SIG_INDEX = *index_opt;			
-		jpg_vec.erase(jpg_vec.begin(), jpg_vec.begin() + (ICC_PROFILE_SIG_INDEX - INDEX_DIFF));		
+		constexpr std::size_t NO_ZLIB_COMPRESSION_ID_INDEX_DIFF = 0x18ULL;
+		const std::size_t ICC_PROFILE_SIG_INDEX = *index_opt;	
+				
+		jpg_vec.erase(jpg_vec.begin(), jpg_vec.begin() + (ICC_PROFILE_SIG_INDEX - INDEX_DIFF));	
+		isDataCompressed = (jpg_vec[NO_ZLIB_COMPRESSION_ID_INDEX - NO_ZLIB_COMPRESSION_ID_INDEX_DIFF] != NO_ZLIB_COMPRESSION_ID);	
 		isBlueskyFile = false;
 	}
-		
-	const std::size_t COMPRESSION_MARKER_INDEX = isBlueskyFile ? 0x14BULL : 0x68ULL;
-	if (jpg_vec[COMPRESSION_MARKER_INDEX] == 0x58ULL) isDataCompressed = false;
-
+	
 	if (isBlueskyFile) { // EXIF segment (FFE1) for data file storage is used instead of ICC Profile (FFE2) segment. Also check for PHOTOSHOP & XMP segments and their index locations.
 		constexpr size_t PSHOP_XMP_SEARCH_LIMIT =  125480ULL; 
     	constexpr auto 
@@ -1808,8 +1881,8 @@ static int recoverData(vBytes& jpg_vec, Mode mode, fs::path& image_file_path) {
         		std::copy_n(jpg_vec.begin() + PSHOP_FIRST_DATASET_FILE_INDEX, PSHOP_FIRST_DATASET_SIZE, jpg_vec.begin() + EXIF_DATA_END_INDEX);
         	} else {
 				// We have a second (final) dataset for the photoshop segment...
-            	vBytes pshop_tmp_vec;
-            	pshop_tmp_vec.reserve(PSHOP_FIRST_DATASET_SIZE);
+            	vBytes pshop_tmp_vec; // To store second pshop dataset and (if found) the xmp segment...
+            	pshop_tmp_vec.reserve(PSHOP_FIRST_DATASET_SIZE * 4ULL);
             	
             	pshop_tmp_vec.insert(pshop_tmp_vec.end(), jpg_vec.begin() + PSHOP_FIRST_DATASET_FILE_INDEX, jpg_vec.begin() + PSHOP_FIRST_DATASET_FILE_INDEX + PSHOP_FIRST_DATASET_SIZE);
 
@@ -1820,8 +1893,6 @@ static int recoverData(vBytes& jpg_vec, Mode mode, fs::path& image_file_path) {
                 	PSHOP_SECOND_DATASET_FILE_INDEX = PSHOP_SECOND_DATASET_SIZE_INDEX + PSHOP_DATASET_FILE_INDEX_DIFF;
 
             	const uint16_t PSHOP_SECOND_DATASET_SIZE = static_cast<uint16_t>(getValue(view(jpg_vec), PSHOP_SECOND_DATASET_SIZE_INDEX, BYTE_LENGTH));
-
-            	pshop_tmp_vec.reserve(pshop_tmp_vec.size() + PSHOP_SECOND_DATASET_SIZE);
             	
             	pshop_tmp_vec.insert(pshop_tmp_vec.end(), jpg_vec.begin() + PSHOP_SECOND_DATASET_FILE_INDEX, jpg_vec.begin() + PSHOP_SECOND_DATASET_FILE_INDEX + PSHOP_SECOND_DATASET_SIZE);
 
@@ -1851,8 +1922,9 @@ static int recoverData(vBytes& jpg_vec, Mode mode, fs::path& image_file_path) {
                 	constexpr std::size_t EXIF_DATA_END_INDEX_DIFF = 351ULL;
                 			
                 	const std::size_t EXIF_DATA_END_INDEX = XMP_CREATOR_SIG_INDEX - EXIF_DATA_END_INDEX_DIFF;
-                			
+					
 					// Append the binary data from multiple segments (pshop (2x datasets) + xmp) to the EXIF binary segment data. We now have the complete data file.
+                	jpg_vec.reserve(jpg_vec.size() + pshop_tmp_vec.size());			
                 	jpg_vec.insert(jpg_vec.begin() + EXIF_DATA_END_INDEX, pshop_tmp_vec.begin(), pshop_tmp_vec.end());
             	}
         	}
