@@ -43,9 +43,9 @@ For platforms such as ***X-Twitter*** & ***Tumblr***, which have small size limi
 ## Usage (Linux)
 
 ```console
+Note: Compiler support for C++23 required.
 
-user1@mx:~/Downloads/jdvrif-main/src$ sudo apt-get install libsodium-dev
-user1@mx:~/Downloads/jdvrif-main/src$ sudo apt-get install libturbojpeg0-dev
+user1@mx:~/Downloads/jdvrif-main/src$ sudo apt install libsodium-dev libturbojpeg0-dev
 user1@mx:~/Downloads/jdvrif-main/src$ chmod +x compile_jdvrif.sh
 user1@mx:~/Downloads/jdvrif-main/src$ ./compile_jdvrif.sh
 user1@mx:~/Downloads/jdvrif-main/src$ Compilation successful. Executable 'jdvrif' created.
@@ -53,9 +53,9 @@ user1@mx:~/Downloads/jdvrif-main/src$ sudo cp jdvrif /usr/bin
 
 user1@mx:~/Desktop$ jdvrif 
 
-Usage: jdvrif conceal [-b|-r] <cover_image> <secret_file>
-       jdvrif recover <cover_image>  
-       jdvrif --info
+Usage:  jdvrif conceal [-b|-r] <cover_image> <secret_file>
+        jdvrif recover <cover_image>  
+        jdvrif --info
 
 user1@mx:~/Desktop$ jdvrif conceal your_cover_image.jpg your_secret_file.doc
 
@@ -70,7 +70,7 @@ Platform compatibility for output image:-
   ✓ ImgPile
   ✓ Flickr
   
-Saved "file-embedded" JPG image: jrif_12462.jpg (143029 bytes).
+Saved "file-embedded" JPG image: jrif_129462.jpg (143029 bytes).
 
 Recovery PIN: [***2166776980318349924***]
 
@@ -78,7 +78,7 @@ Important: Keep your PIN safe, so that you can extract the hidden file.
 
 Complete!
         
-user1@mx:~/Desktop$ jdvrif recover jrif_12462.jpg
+user1@mx:~/Desktop$ jdvrif recover jrif_129462.jpg
 
 PIN: *******************
 
