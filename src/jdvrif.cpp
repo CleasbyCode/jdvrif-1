@@ -442,8 +442,15 @@ struct TJHandle {
 };
 
 struct TJBuffer {
-	unsigned char* data = nullptr;
-	~TJBuffer() { if (data) tjFree(data); }
+    unsigned char* data = nullptr;
+
+    TJBuffer() = default;
+    ~TJBuffer() { if (data) tjFree(data); }
+
+    TJBuffer(const TJBuffer&) = delete;
+    TJBuffer& operator=(const TJBuffer&) = delete;
+    TJBuffer(TJBuffer&&) = delete;
+    TJBuffer& operator=(TJBuffer&&) = delete;
 };
 
 // Standard JPEG Luminance Quantization Table (Quality 50) in ZigZag order
@@ -554,10 +561,7 @@ static void optimizeImage(vBytes& jpg_vec, bool isProgressive) {
     if (tjTransform(transformer.get(), jpg_vec.data(), static_cast<unsigned long>(jpg_vec.size()), 1, &dstBuffer.data, &dstSize, &xform, 0) != 0) {
     	throw std::runtime_error(std::format("tjTransform: {}", tjGetErrorStr2(transformer.get())));
     }
-
-    if (xop == TJXOP_ROT90 || xop == TJXOP_ROT270 || xop == TJXOP_TRANSPOSE || xop == TJXOP_TRANSVERSE) {
-        std::swap(width, height);
-    }
+	
     jpg_vec.assign(dstBuffer.data, dstBuffer.data + dstSize);
 }
 
@@ -1952,5 +1956,6 @@ int main(int argc, char** argv) {
     }
      return 0;
 }
+
 
 
