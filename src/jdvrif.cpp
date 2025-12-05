@@ -80,8 +80,6 @@
 #include <fstream> 
 #include <iostream>
 #include <initializer_list>
-#include <iterator> 
-#include <limits>
 #include <optional>
 #include <print>
 #include <ranges>
@@ -284,7 +282,8 @@ public:
                 out.option = (arg(i) == "-b") ? Option::Bluesky : Option::Reddit;
                 ++i;
             }
-            if (i + 1 >= argc || (i + 2) != argc) die(USAGE);
+            if (argc != i + 2) die(USAGE);
+			if (arg(i).empty() || arg(i + 1).empty()) die(USAGE);
             out.image_file_path = fs::path(arg(i));
             out.data_file_path  = fs::path(arg(i + 1));
             out.mode = Mode::conceal;
@@ -293,11 +292,11 @@ public:
 
         if (MODE == "recover") {
             if (argc != 3) die(USAGE);
+			if (arg(2).empty()) die(USAGE);
             out.image_file_path = fs::path(arg(2));
             out.mode = Mode::recover;
             return out;
         }
-
         die(USAGE);
     }
 };
@@ -371,10 +370,10 @@ static std::optional<std::size_t> searchSig(std::span<const Byte> v, std::span<c
     if (ifd_offset < 8 || ifd_offset >= tiff_data.size()) return std::nullopt;
     
     uint16_t entry_count = read16(ifd_offset);
-    std::size_t current_entry = ifd_offset + 2ULL; 
+    std::size_t current_entry = ifd_offset + 2; 
 
     constexpr uint16_t TAG_ORIENTATION = 0x0112;
-    constexpr std::size_t ENTRY_SIZE = 12ULL;
+    constexpr std::size_t ENTRY_SIZE = 12;
 
     for (uint16_t i = 0; i < entry_count; ++i) {
     	if (current_entry + ENTRY_SIZE > tiff_data.size()) return std::nullopt;
@@ -561,7 +560,7 @@ static void optimizeImage(vBytes& jpg_vec, bool isProgressive) {
     if (tjTransform(transformer.get(), jpg_vec.data(), static_cast<unsigned long>(jpg_vec.size()), 1, &dstBuffer.data, &dstSize, &xform, 0) != 0) {
     	throw std::runtime_error(std::format("tjTransform: {}", tjGetErrorStr2(transformer.get())));
     }
-	
+
     jpg_vec.assign(dstBuffer.data, dstBuffer.data + dstSize);
 }
 
@@ -1147,6 +1146,25 @@ static std::size_t encryptDataFile(vBytes& segment_vec, vBytes& data_vec, vBytes
     return pin;
 }
 
+struct SyncGuard {
+	bool old_status;
+    SyncGuard() : old_status(std::cout.sync_with_stdio(false)) {}
+    ~SyncGuard() { std::cout.sync_with_stdio(old_status); }
+};
+
+#ifndef _WIN32
+	struct TermiosGuard {
+    	termios old;
+    	TermiosGuard() {
+        	tcgetattr(STDIN_FILENO, &old);
+        	termios newt = old;
+        	newt.c_lflag &= ~(ICANON | ECHO);
+        	tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+    	}
+    	~TermiosGuard() { tcsetattr(STDIN_FILENO, TCSANOW, &old); }
+	};
+#endif
+
 static std::size_t getPin() {
     constexpr auto MAX_UINT64_STR = std::string_view{"18446744073709551615"};
     constexpr std::size_t MAX_PIN_LENGTH = 20;
@@ -1221,11 +1239,10 @@ static std::string decryptDataFile(vBytes& jpg_vec, bool isBlueskyFile, bool& ha
 
     std::size_t
         recovery_pin       = getPin(),
+		value_byte_length  = 8,
         sodium_keys_length = 48,
         sodium_xor_key_pos = SODIUM_KEY_INDEX,
         sodium_key_pos     = SODIUM_KEY_INDEX + SODIUM_XOR_KEY_LENGTH;
-
-    std::size_t value_byte_length = 8;
 
     updateValue(jpg_vec, SODIUM_KEY_INDEX, recovery_pin, value_byte_length);
 
@@ -1275,25 +1292,25 @@ static std::string decryptDataFile(vBytes& jpg_vec, bool isBlueskyFile, bool& ha
     }
 
 	if (isBlueskyFile) {
-        constexpr auto EXIF_SIG = std::to_array<Byte>({0xFF, 0xE1});
+    	constexpr auto EXIF_SIG = std::to_array<Byte>({0xFF, 0xE1});
         constexpr std::size_t
-            SEARCH_LIMIT  = 100,
-            EXIF_MAX_SIZE = 65534;
+        	SEARCH_LIMIT  = 100,
+        	EXIF_MAX_SIZE = 65534;
 
         auto index_opt = searchSig(jpg_vec, EXIF_SIG, SEARCH_LIMIT);
 
         if (!index_opt) {
-            throw std::runtime_error("File Extraction Error: Expected segment marker not found. Embedded data file is corrupt!");
+        	throw std::runtime_error("File Extraction Error: Expected segment marker not found. Embedded data file is corrupt!");
         }
 
         value_byte_length = 2;
 
         const std::size_t
-            EXIF_SIG_INDEX    = *index_opt,
-            EXIF_SEGMENT_SIZE = getValue(jpg_vec, EXIF_SIG_INDEX + value_byte_length, value_byte_length);
+        	EXIF_SIG_INDEX    = *index_opt,
+        	EXIF_SEGMENT_SIZE = getValue(jpg_vec, EXIF_SIG_INDEX + value_byte_length, value_byte_length);
 
-        if (EMBEDDED_FILE_SIZE >= EXIF_MAX_SIZE && EXIF_MAX_SIZE > EXIF_SEGMENT_SIZE) {
-            throw std::runtime_error("File Extraction Error: Invalid segment size. Embedded data file is corrupt!");
+    	if (EMBEDDED_FILE_SIZE >= EXIF_MAX_SIZE && EXIF_MAX_SIZE > EXIF_SEGMENT_SIZE) {
+        	throw std::runtime_error("File Extraction Error: Invalid segment size. Embedded data file is corrupt!");
         }
     }
 	
@@ -1871,16 +1888,14 @@ static int recoverData(vBytes& jpg_vec, Mode mode, fs::path& image_file_path) {
 
     if (hasDecryptionFailed) {
         std::fstream file(image_file_path, std::ios::in | std::ios::out | std::ios::binary);
-
         if (pin_attempts_val == 0x90) {
             pin_attempts_val = 0;
         } else {
             pin_attempts_val++;
         }
-
         if (pin_attempts_val > 2) {
             file.close();
-            std::ofstream file(image_file_path, std::ios::out | std::ios::trunc | std::ios::binary);
+            std::ofstream(image_file_path, std::ios::out | std::ios::trunc | std::ios::binary);
         } else {
             file.seekp(pin_attempts_index);
             file.write(reinterpret_cast<char*>(&pin_attempts_val), sizeof(pin_attempts_val));
@@ -1930,7 +1945,6 @@ int main(int argc, char** argv) {
         if (sodium_init() < 0) {
             throw std::runtime_error("Libsodium initialization failed!");
         }
-
 		#ifdef _WIN32
     		SetConsoleOutputCP(CP_UTF8);  
 		#endif
@@ -1954,8 +1968,5 @@ int main(int argc, char** argv) {
         std::println(std::cerr, "\n{}\n", e.what());
         return 1;
     }
-     return 0;
+    return 0;
 }
-
-
-
