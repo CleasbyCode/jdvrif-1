@@ -392,7 +392,7 @@ To correctly download images from X-Twitter or Reddit, click image within the po
     }
 
     // Helper: Map EXIF orientation (1-8) to TurboJPEG Transform Operations
-    int getTransformOp(uint16_t orientation) {
+    [[nodiscard]] int getTransformOp(uint16_t orientation) {
         switch (orientation) {
             case 2: return TJXOP_HFLIP;
             case 3: return TJXOP_ROT180;
@@ -403,7 +403,7 @@ To correctly download images from X-Twitter or Reddit, click image within the po
             case 8: return TJXOP_ROT270;
             default: return TJXOP_NONE;
         }
-    }
+	}
 
     // TurboJPEG. RAII wrapper for tjhandle (decompressor or compressor)
     struct TJHandle {
@@ -498,15 +498,10 @@ To correctly download images from X-Twitter or Reddit, click image within the po
             std::size_t table_size = (precision == 0) ? 64 : 128;
             if (pos + table_size > end) break;
 
-            if (table_id == 0) {
-                int sum = 0;
-                for (std::size_t i = 0; i < 64; ++i) {
-                    if (precision == 0) {
-                        sum += jpg[pos + i];
-                    } else {
-                        sum += (static_cast<int>(jpg[pos + i * 2]) << 8) | jpg[pos + i * 2 + 1];
-                    }
-                }
+             if (table_id == 0) {
+                int sum = std::ranges::fold_left(std::views::iota(0uz, 64uz), 0, [&](int acc, std::size_t i) {
+                    return acc + (precision == 0 ? jpg[pos + i] : (static_cast<int>(jpg[pos + i * 2]) << 8) | jpg[pos + i * 2 + 1]);
+                });
 
                 if (sum <= 64) return 100;
                 if (sum >= 16320) return 1;
