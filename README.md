@@ -1,6 +1,6 @@
 # jdvrif
 
-***jdvrif*** is a fast, easy-to-use steganography command-line tool used for concealing and extracting any file type via a **JPG** image.  
+***jdvrif*** is a fast, easy-to-use steganography command-line tool for concealing and extracting any file type via a **JPG** image.  
 
 There is also a [***Web edition***](https://cleasbycode.co.uk/jdvrif/app/), which you can use immediately, as a convenient alternative to downloading and compiling the CLI source code. Web file uploads are limited to **20MB**.    
 
@@ -11,7 +11,7 @@ Unlike the common steganography method of concealing data within the pixels of a
 
 You can conceal any file type up to ***2GB***, although compatible sites (*listed below*) have their own ***much smaller*** size limits and *other requirements.  
 
-For increased storage capacity and better security, your embedded data file is compressed with ***zlib/deflate*** and encrypted using the ***libsodium*** cryptographic library.  
+For increased storage capacity and better security, your embedded data file is compressed with ***zlib*** and encrypted using the ***libsodium*** cryptographic library.  
 
 ***jdvrif*** partly derives from the ***[technique implemented](https://www.vice.com/en/article/bj4wxm/tiny-picture-twitter-complete-works-of-shakespeare-steganography)*** by security researcher ***[David Buchanan](https://www.da.vidbuchanan.co.uk/).*** 
 
@@ -66,13 +66,17 @@ Complete! Please check your file.
 ```
 ## Compatible Platforms
 \******************   
-***Bluesky*** has recently changed the image format of saved / downloaded images to ***WEBP***.  
+Note: ***Bluesky*** now saves images as ***WEBP*** by default. 
 
-This has made the recovery incompatible for ***jdvrif*** and ***JPG*** images.  
+To save an image as ***JPG***, so that you can still recover concealed data with ***jdvrif***,  
+right-click on an image that you want to save. From the menu, select ***Open image in new tab***.  
 
-I will keep the ***Bluesky*** code in ***jdvrif*** for educational purpopses and just in case ***Bluesky*** goes back to saving images as ***JPG***.  
-       
-If you still want to a tool to conceal data in images posted on ***Bluesky*** you can use my ***WEBP*** steganography CLI tool ***[wbpdv](https://github.com/CleasbyCode/wbpdv)***  
+Select the new tab and within the address bar, move to the end of the address and add ***@jpg*** then hit enter.  
+Right-click the image and from the menu select ***Save image...***  
+
+Your image should now be downloaded as a ***JPG***, which will now work with ***jdvrif***.
+         
+If you want a tool to conceal data using ***WEBP*** images to post on ***Bluesky*** you can use my ***WEBP*** steganography CLI tool ***[wbpdv](https://github.com/CleasbyCode/wbpdv)***  
 \******************
 
 *Posting size limit measured by the ***combined*** size of the ***cover image*** + ***compressed data file:****  
@@ -107,7 +111,7 @@ jdvrif ***conceal*** mode ***platform*** options:
   "***-b***" To create compatible "*file-embedded*" ***JPG*** images for posting on the ***Bluesky*** platform, you must use the ***-b*** option with ***conceal*** mode.
   ```console
   $ jdvrif conceal -b my_image.jpg hidden.doc
-  ```
+```
 
   These images are only compatible for posting on ***Bluesky***. Your embedded data file will be removed if posted on a different platform.
  
