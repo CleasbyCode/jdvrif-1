@@ -20,7 +20,9 @@ For increased storage capacity and better security, your embedded data file is c
 ## Compilation & Usage (Linux)
 
 ```console
+$ sudo apt update
 $ sudo apt install g++ cmake ninja-build util-linux libsodium-dev libturbojpeg0-dev zlib1g-dev libdeflate-dev
+
 $ chmod +x compile_jdvrif.sh
 $ ./compile_jdvrif.sh
 
@@ -149,22 +151,83 @@ https://github.com/user-attachments/assets/b4c72ea7-40e3-49b0-89aa-ae2dd8ccccb9
 
 https://github.com/user-attachments/assets/f56f54bb-658f-4b0e-a2f3-7d3428333304
 
-## Third-Party Libraries
+## Third-Party Software and Assets
 
-This project makes use of the following third-party libraries:
+  ### Core applications
 
-- **libsodium**: For cryptographic functions.
-  - [**LICENSE**](https://github.com/jedisct1/libsodium/blob/master/LICENSE)
-  - Copyright (C) 2013-2025 Frank Denis (github@pureftpd.org)
-- libjpeg-turbo (see [***LICENSE***](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/main/LICENSE.md) file)  
-  - {This software is based in part on the work of the Independent JPEG Group.}
-  - Copyright (C) 2009-2024 D. R. Commander. All Rights Reserved.
-  - Copyright (C) 2015 Viktor Szathmáry. All Rights Reserved.
-- **zlib**: General-purpose compression library
-  - License: zlib/libpng license (see [***LICENSE***](https://github.com/madler/zlib/blob/develop/LICENSE) file)
-  - Copyright (C) 1995-2024 Jean-loup Gailly and Mark Adler
-- **libdeflate**: Fast, whole-buffer DEFLATE/zlib/gzip compression and decompression library
-  - License: MIT (Expat) license (see [***LICENSE***](https://raw.githubusercontent.com/ebiggers/libdeflate/master/COPYING) file)
-  - Copyright (C) 2016-2024 Eric Biggers.
+  - [libsodium](https://github.com/jedisct1/libsodium) — cryptographic random generation, Argon2id
+  key derivation and XChaCha20-Poly1305 secret streams. Dynamically linked as a system library.
+      
+      License: [ISC License](https://github.com/jedisct1/libsodium/blob/master/LICENSE)
+    
+      Copyright (c) 2013–2026 Frank Denis.
+    
+ - [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo) — JPEG processing and lossless transformation. Dynamically linked as a system library.
+
+      This software is based in part on the work of the Independent JPEG Group.
+
+      Licenses: [Independent JPEG Group License, Modified BSD 3-Clause License,
+      and zlib License](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/2.1.5/LICENSE.md).
+
+      Copyright © 1991–2020 Thomas G. Lane and Guido Vollbeding.
+   
+      Copyright © 2009–2023 D. R. Commander. All Rights Reserved.
+   
+      Copyright © 2015 Viktor Szathmáry. All Rights Reserved.
+   
+  - [zlib](https://github.com/madler/zlib) — Streaming zlib compression and decompression. Dynamically linked as a system library.
+
+    License: [zlib License](https://github.com/madler/zlib/blob/develop/LICENSE)
+    
+    Copyright (C) 1995–2026 Jean-loup Gailly and Mark Adler.
+
+  - [libdeflate](https://github.com/ebiggers/libdeflate) — Fast whole-buffer zlib-format compression. Dynamically linked as a system library.
+
+    License: [MIT](https://github.com/ebiggers/libdeflate/blob/master/COPYING)
+    
+    Copyright 2016 Eric Biggers.
+    
+    Copyright 2024 Google LLC.
+
+  ### Incorporated code and assets
+
+  - [base64simd](https://github.com/WojciechMula/base64simd) — The AVX2 Base64 encoder is adapted from Wojciech Muła’s vector Base64
+    implementation.
+    
+    License: [BSD 2-Clause](https://github.com/WojciechMula/base64simd/blob/master/LICENSE)
+    
+    Copyright (c) 2015–2018, Wojciech Muła. All rights reserved.
+
+  - [Compact ICC Profiles](https://github.com/saucecontrol/Compact-ICC-Profiles) — embedded Adobe-
+  compatible ICC profile.
+
+    License: [CC0 1.0 Universal](https://github.com/saucecontrol/Compact-ICC-Profiles/blob/master/license)
+
+  ### Optional Bluesky posting helper
+
+  - Bryan Newbold / ATProto Hacker Cookbook — create_bsky_post.py — Basis for the [forked](https://gist.github.com/CleasbyCode/1eb678ca1fa1975b1c1e20aeec33637e) Bluesky posting helper (src/bsky/bsky_post.py). 
+    For reference see the [Cookbook copy](https://github.com/bluesky-social/cookbook/blob/main/python-bsky-post/create_bsky_post.py)
+
+    License: [CC0 1.0 Universal](https://github.com/bluesky-social/cookbook/blob/main/LICENSE-CC0).
+
+  - Requests — HTTP and Bluesky API requests.
+
+    License: [Apache 2.0](https://github.com/psf/requests/blob/main/LICENSE) / [NOTICE](https://github.com/psf/requests/blob/main/NOTICE)
+    
+    Copyright 2019 Kenneth Reitz.
+
+  - Beautiful Soup 4 — HTML and Open Graph metadata parsing.
+
+    License: [MIT](https://pypi.org/project/beautifulsoup4/)
+    
+    Copyright (c) Leonard Richardson.
+
+  - Pillow — Image validation, dimensions, and aspect-ratio handling.
+
+    License: [MIT-CMU](https://github.com/python-pillow/Pillow/blob/main/LICENSE)
+    
+    PIL copyright © 1997–2011 Secret Labs AB and © 1995–2011 Fredrik Lundh and contributors.
+    
+    Pillow copyright © 2010 Jeffrey “Alex” Clark and contributors.
     
 ##
