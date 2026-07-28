@@ -29,7 +29,7 @@ $ ./compile_jdvrif.sh
 $ sudo cp jdvrif /usr/bin
 $ jdvrif 
 
-Usage: jdvrif conceal [-b|-r] <cover_image> <secret_file>
+Usage: jdvrif conceal [-b] <cover_image> <secret_file>
        jdvrif recover <cover_image>  
        jdvrif --info
 
@@ -68,7 +68,7 @@ Complete! Please check your file.
 Note: ***Bluesky*** now saves images as ***WEBP*** by default. 
 
 To save an image as ***JPG***, so that you can still recover concealed data with ***jdvrif***,  
-right-click on an image that you want to save. From the menu, select ***Open image in new tab***.  
+first click the image in the post to open it, then right-click on the image. From the menu, select ***Open image in new tab***.  
 
 Select the new tab and within the address bar, move to the end of the address and add ***@jpg*** then hit enter.  
 Right-click the image and from the menu select ***Save image...***  
@@ -81,7 +81,7 @@ If you want a tool to conceal data using ***WEBP*** images to post on ***Bluesky
 *Posting size limit measured by the ***combined*** size of the ***cover image*** + ***compressed data file:****  
 
 ● ***Flickr*** (**200MB**), ***ImgPile*** (**100MB**), ***ImgBB*** (**32MB**),  
-● ***PostImage*** (**32MB**), ***Reddit*** (**20MB** | ***-r option***), ***Pixelfed*** (**15MB**).
+● ***PostImage*** (**32MB**), ***Pixelfed*** (**15MB**).
 
 *Size limit measured ***only*** by the ***compressed data file size:****  
 
@@ -89,12 +89,13 @@ If you want a tool to conceal data using ***WEBP*** images to post on ***Bluesky
 
 For example, with ***Mastodon***, if your cover image is **1MB** you can still embed a data file up to the **~6MB** size limit.
 
-**Other: The ***Bluesky*** platform has ***separate*** size limits for the ***cover image*** and the ***compressed data file:****  
+**Other: The ***Bluesky*** platform has ***separate*** size limits for the ***cover image*** and the ***compressed hidden data file:****  
 
-● ***Bluesky*** (***-b option***). Cover image size limit (**800KB**). Compressed data file size limit (**~171KB**).  
-● "***bsky_post.py***" script is required to post images on ***Bluesky***. *More info on this further down the page.*
+● ***Bluesky*** (***-b option***). Cover image max size limit (**2,000,000 bytes / ~1.9MB**). Your compressed hidden data file (payload) max size limit (**~171KB**).  The final embedded cover image (cover image + hidden file) must not exceed 2,000,000 bytes (~1.9MB).  
 
-For platforms such as ***X-Twitter*** & ***Tumblr***, which have small size limits, you may want to focus on data that compress well, such as text files, etc.  
+● "***create_bsky_post.py***" script is required to post images on ***Bluesky***. *More info on this further down the page.*
+
+For platforms such as ***X-Twitter*** & ***Tumblr***, which have small size limits, you may want to focus on data that compresses well, such as text files, etc.  
 
 https://github.com/user-attachments/assets/c8c38e6d-ea23-4d67-98d9-cebdcd82b449
 
@@ -114,42 +115,15 @@ jdvrif ***conceal*** mode ***platform*** options:
 
   These images are only compatible for posting on ***Bluesky***. Your embedded data file will be removed if posted on a different platform.
  
-  You are also required to use the Python script ***"bsky_post.py"*** (found in the repo ***src*** folder) to post the image to ***Bluesky***.
+  You are also required to use the Python script [create_bsky_post.py](https://github.com/CleasbyCode/jdvrif/blob/main/src/bsky/create_bsky_post.py) (found in the repo ***src/bsky*** folder) to post the image to ***Bluesky***.
   It will not work if you post images to ***Bluesky*** via the browser site or mobile app.  
 
   To use the script, you will need to create an [***app password***](https://bsky.app/settings/app-passwords) from your ***Bluesky*** account.  
 
-  Here are some basic usage examples for the ***bsky_post.py*** script.  
-
-  Standard image post to your bsky profile:
-
-  ```console
-  $ python3 bsky_post.py --handle you.bsky.social --password xxxx-xxxx-xxxx-xxxx --image your_image.jpg --alt-text "alt-text here (optional)" "standard post text here (required)"
-  ```
-  If you want to post multiple images (Max. 4):  
-
-  ```console 
-  $ python3 bsky_post.py --handle you.bsky.social --password xxxx-xxxx-xxxx-xxxx --image img1.jpg --image img2.jpg --alt-text "alt_here" "standard post text..."
-  ```
-  If you want to post an image as a reply to another post:  
-
-  ```console
-  $ python3 bsky_post.py --handle you.bsky.social --password xxxx-xxxx-xxxx-xxxx --image your_image.jpg --alt-text "alt_here" --reply-to https://bsky.app/profile/someone.bsky.social/post/8m2tgw6cgi23i "standard post text..."
-  ```
+  See the [create_bsky_post.py](https://github.com/CleasbyCode/jdvrif/blob/main/src/bsky/create_bsky_post.py) script in the src/bsky folder for some basic usage examples.
+  
 
 https://github.com/user-attachments/assets/b4c72ea7-40e3-49b0-89aa-ae2dd8ccccb9   
-
-   "***-r***" To create compatible "*file-embedded*" ***JPG*** images for posting on the ***Reddit*** platform, you must use the ***-r*** option with ***conceal*** mode.
-   ```console
-  $ jdvrif conceal -r my_image.jpg secret.mp3 
-   ```
-   From the ***Reddit*** site, select "***Create Post***" followed by "***Images & Video***" tab, to attach and post your ***JPG*** image.
-  
-   These images are only compatible for posting on ***Reddit***. Your embedded data file will be removed if posted on a different platform.
-  
- To correctly download images from ***X-Twitter*** or ***Reddit***, click the image in the post to fully expand it, before saving.
-
-https://github.com/user-attachments/assets/f56f54bb-658f-4b0e-a2f3-7d3428333304
 
 ## Third-Party Software and Assets
 
