@@ -9,9 +9,11 @@ An experimental ***Rust*** port [***jdvrif-rs***](https://github.com/CleasbyCode
 ![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_323291.jpg)  
 *Demo Image: **"A place of concealment"** / ***PIN: 2190398302048725932****
 
-Unlike the common steganography method of concealing data within the pixels of a cover image ([***LSB***](https://ctf101.org/forensics/what-is-stegonagraphy/)), ***jdvrif*** hides files within ***application segments*** of a ***JPG*** image. 
+Unlike the common [***LSB steganography method***](https://ctf101.org/forensics/what-is-stegonagraphy/) of concealing data within the pixels of a cover image, ***jdvrif*** mostly hides data within ***application segments*** of a ***JPG*** image (ICC, EXIF, XMP, etc).  
 
-You can conceal any file type up to ***2GB***, although compatible sites (*listed below*) have their own ***much smaller*** size limits and *other requirements.  
+The exception to this is the ***Reddit*** platform conceal mode (-r), where we use the [***QIM steganography method***](https://ieeexplore.ieee.org/document/4804513) (JPEG DCT-domain Quantization Index Modulation), as this is the only storage method that currently works for ***Reddit***.
+
+You can conceal any file type up to ***2GB*** for the default conceal mode, although other platform conceal modes and compatible sites (*listed below*) have their own ***much smaller*** size limits and *other requirements.  
 
 For increased storage capacity and better security, your embedded data file is compressed with ***libdeflate/zlib*** — unless it's already a compressed file type over 10 MB — and encrypted with ***XChaCha20-Poly1305*** using the ***libsodium*** cryptographic library.
 
@@ -67,8 +69,8 @@ Complete! Please check your file.
 \******************   
 Note: ***Bluesky*** now saves images as ***WEBP*** by default. 
 
-To save an image as ***JPG***, so that you can still recover concealed data with ***jdvrif***,  
-first click the image in the post to open it, then right-click on the image. From the menu, select ***Open image in new tab***.  
+To save an image as ***JPG***, so that you can still recover concealed data with ***jdvrif***.  
+First click the image in the post to open it, then right-click on the image. From the menu, select ***Open image in new tab***.  
 
 Select the new tab and within the address bar, move to the end of the address and add ***@jpg*** then hit enter.  
 Right-click the image and from the menu select ***Save image...***  
@@ -91,11 +93,15 @@ For example, with ***Mastodon***, if your cover image is **1MB** you can still e
 
 **Other: The ***Bluesky*** platform has ***separate*** size limits for the ***cover image*** and the ***compressed hidden data file:****  
 
-● ***Bluesky*** (***-b option***). Cover image max size limit (**2,000,000 bytes / ~1.9MB**). Your compressed hidden data file (payload) max size limit (**~171KB**).  The final embedded cover image (cover image + hidden file) must not exceed 2,000,000 bytes (~1.9MB).  
+● ***Bluesky*** (***-b option***). Cover image max size limit (**2,000,000 bytes / ~1.9MB**). Your compressed hidden data file (payload) max size limit (**~171KB**).  
 
-● "***create_bsky_post.py***" script is required to post images on ***Bluesky***. *More info on this further down the page.*
+The final embedded cover image (cover image + hidden file) must not exceed 2,000,000 bytes (~1.9MB).  "***create_bsky_post.py***" script is required to post images on ***Bluesky***. *More info on this script further down the page.*
 
-For platforms such as ***X-Twitter*** & ***Tumblr***, which have small size limits, you may want to focus on data that compresses well, such as text files, etc.  
+● ***Reddit*** (***-r option***). While the ***Reddit*** platform has an image upload size limit of **20MB**, the data storage capacity for the cover image is ***much smaller*** and depends on image dimension size.  
+
+For example, a cover image with **1024x1024** dimensions can store only **~6KB** of data, an image with **4096x4096** dimensions can store **~109KB** and an image with **6324×6324** max dimensions can store **~254KB**. 
+
+For platforms such as ***X-Twitter***, ***Reddit*** & ***Tumblr***, which have small data size limits, you may want to focus on data that compresses well, such as text files, etc.  
 
 https://github.com/user-attachments/assets/c8c38e6d-ea23-4d67-98d9-cebdcd82b449
 
@@ -107,7 +113,20 @@ jdvrif ***mode*** arguments:
   ***recover*** - Decrypts, uncompresses and extracts the concealed data file from a ***JPG*** cover image.
  
 jdvrif ***conceal*** mode ***platform*** options:
- 
+
+ "***-r***" To create compatible "*file-embedded*" ***JPG*** images for posting on the ***Reddit*** platform, you must use the ***-r*** option with ***conceal*** mode.
+  ```console
+  $ jdvrif conceal -r my_image.jpg hidden.doc
+```
+
+  These images are only compatible for posting on ***Reddit***. Your embedded data file will be removed if posted on a different platform.  
+  
+  When saving/downloading an image from ***Reddit*** make sure to click on the image within the post to fully expand it before saving.  
+
+
+https://github.com/user-attachments/assets/9f1b4607-e7f1-4c5f-8929-b42c1a85bb88
+
+
   "***-b***" To create compatible "*file-embedded*" ***JPG*** images for posting on the ***Bluesky*** platform, you must use the ***-b*** option with ***conceal*** mode.
   ```console
   $ jdvrif conceal -b my_image.jpg hidden.doc
