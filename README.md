@@ -2,22 +2,42 @@
 
 ***jdvrif*** is a fast, easy-to-use steganography command-line tool for concealing and extracting any file type via a **JPG** image.  
 
-There is also a [***Web edition***](https://cleasbycode.co.uk/jdvrif/app/), which you can use immediately, as a convenient alternative to downloading and compiling the CLI source code. Web file uploads are limited to **20MB**.    
+You can conceal any file type up to ***2GB*** using the ***default conceal mode***, although other platform conceal modes and compatible social media sites (*listed below*) have their own ***much smaller*** size limits and *other requirements.  
 
-An experimental ***Rust*** port [***jdvrif-rs***](https://github.com/CleasbyCode/jdvrif-rs) is available for those interested in that language. 
+For increased storage capacity and better security, your embedded data file is compressed with ***libdeflate/zlib*** — unless it's already a compressed file type over 10 MB — and encrypted with ***XChaCha20-Poly1305*** using the ***libsodium*** cryptographic library.
+
+There is a [***Web edition***](https://cleasbycode.co.uk/jdvrif/app/) of ***jdvrif***, which you can use immediately, as a convenient alternative to downloading and compiling the CLI source code. Web file uploads are limited to **20MB**.    
+
+An experimental ***Rust*** port [***jdvrif-rs***](https://github.com/CleasbyCode/jdvrif-rs) is also available for those interested in that language. 
+
+***jdvrif*** partly derives from the ***[technique implemented](https://www.vice.com/en/article/bj4wxm/tiny-picture-twitter-complete-works-of-shakespeare-steganography)*** by security researcher ***[David Buchanan](https://www.da.vidbuchanan.co.uk/).*** 
 
 ![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_323291.jpg)  
 *Demo Image: **"A place of concealment"** / ***PIN: 2190398302048725932****
 
 Unlike the common [***LSB***](https://ctf101.org/forensics/what-is-stegonagraphy/) (*Least Significant Bit*) steganography method of concealing data within the pixels of a cover image, ***jdvrif*** mostly hides data within ***application segments*** of a ***JPG*** image (ICC, EXIF, XMP, etc).  
 
-The exception to this is the ***Reddit*** platform conceal mode (***-r***), where we use the [***QIM steganography method***](https://ieeexplore.ieee.org/document/4804513) (JPEG DCT-domain Quantization Index Modulation), as this is the only storage method that currently works for ***Reddit***.
+The two platform exceptions to the above default storage method are ***Reddit*** and ***X-Twitter***.  
 
-You can conceal any file type up to ***2GB*** for the default conceal mode, although other platform conceal modes and compatible sites (*listed below*) have their own ***much smaller*** size limits and *other requirements.  
+For the ***Reddit*** conceal mode (***-r***), we use the [***QIM steganography method***](https://ieeexplore.ieee.org/document/4804513) (*JPEG DCT-domain Quantization Index Modulation*), as this is the only storage method that currently works for ***Reddit***.  
 
-For increased storage capacity and better security, your embedded data file is compressed with ***libdeflate/zlib*** — unless it's already a compressed file type over 10 MB — and encrypted with ***XChaCha20-Poly1305*** using the ***libsodium*** cryptographic library.
+To maximise storage capacity for the ***Reddit*** platform, use a cover image with large dimension sizes, **2048x2048**, **4096x4096**, **8192x8192**, etc.  
 
-***jdvrif*** partly derives from the ***[technique implemented](https://www.vice.com/en/article/bj4wxm/tiny-picture-twitter-complete-works-of-shakespeare-steganography)*** by security researcher ***[David Buchanan](https://www.da.vidbuchanan.co.uk/).*** 
+To check your cover image's storage capacity using the ***QIM*** method, run the following command:- 
+```console
+$ jdvrif capsize -r my_cover.jpg
+```
+
+While the ***X-Twitter*** platform can use the default method provided by ***jdvrif***, where data is concealed within APP2/ICC segments, ***X-Twitter*** limits this to a single ICC segment with a maximum size of just **~10KB**. 
+
+To potentially increase the storage capacity for your cover image, greater than the **~10KB** ICC limit, you can use the ***X-Twitter*** platform conceal mode (***-x***), which will use the [***adaptive J-UNIWARD steganography method with Syndrome-Trellis Coding (STC)***](https://www.researchgate.net/publication/338418181_Fast_and_Secure_Steganography_Based_on_J-UNIWARD).  
+
+To maximise storage capacity for the ***X-Twitter*** platform, use a high quality cover image with large dimension sizes, **2048x2048**, **4096x4096**, etc.  
+
+To check your cover image's storage capacity using the ***J-UNIWARD*** method, run the following command:- 
+```console
+$ jdvrif capsize -x my_cover.jpg
+```
 
 ## Compilation & Usage (Linux)
 
@@ -31,8 +51,9 @@ $ ./compile_jdvrif.sh
 $ sudo cp jdvrif /usr/bin
 $ jdvrif 
 
-Usage: jdvrif conceal [-b|-r] <cover_image> <secret_file>
-       jdvrif recover <cover_image>  
+Usage: jdvrif conceal [-b|-r|-x] <cover_image> <secret_file>
+       jdvrif recover <cover_image>
+       jdvrif capsize [-r|-x] <cover_image>
        jdvrif --info
 
 $ jdvrif conceal your_cover_image.jpg your_secret_file.doc
@@ -69,7 +90,8 @@ Complete! Please check your file.
 \******************   
 Note: ***Bluesky*** now saves images as ***WEBP*** by default. 
 
-To save an image as ***JPG***, so that you can still recover concealed data with ***jdvrif***.  
+To save an image as ***JPG***, so that you can still recover concealed data with ***jdvrif***:-  
+
 First click the image in the post to open it, then right-click on the image. From the menu, select ***Open image in new tab***.  
 
 Select the new tab and within the address bar, move to the end of the address and add ***@jpg*** then hit enter.  
@@ -82,24 +104,23 @@ If you want a tool to conceal data using ***WEBP*** images to post on ***Bluesky
 
 *Posting size limit measured by the ***combined*** size of the ***cover image*** + ***compressed data file:****  
 
-● ***Flickr*** (**200MB**), ***ImgPile*** (**100MB**), ***ImgBB*** (**32MB**),  
-● ***PostImage*** (**32MB**), ***Pixelfed*** (**15MB**).
+● ***Flickr*** (**200MB**), ***ImgPile*** (**100MB**), ***ImgBB*** (**32MB**), ***PostImage*** (**32MB**), ***Pixelfed*** (**15MB**).
 
 *Size limit measured ***only*** by the ***compressed data file size:****  
 
-● ***Mastodon*** (**~6MB**), ***Tumblr*** (**~64KB**), ***X-Twitter*** (**~10KB**).  
+● ***Mastodon*** (**~6MB**), ***Tumblr*** (**~64KB**), ***X-Twitter*** (**~10KB / default method**).  
 
 For example, with ***Mastodon***, if your cover image is **1MB** you can still embed a data file up to the **~6MB** size limit.
 
 **Other: The ***Bluesky*** platform has ***separate*** size limits for the ***cover image*** and the ***compressed hidden data file:****  
 
-● ***Bluesky*** (***-b option***). Cover image max size limit (**2,000,000 bytes / ~1.9MB**). Your compressed hidden data file (payload) max size limit (**~171KB**).  
+● ***Bluesky*** (***-b option***). Cover image max size limit (**2,000,000 bytes / ~1.9MB**). Your compressed hidden data file's max size limit (**~171KB**).  
 
 The final embedded cover image (cover image + hidden file) must not exceed 2,000,000 bytes (~1.9MB).  "***create_bsky_post.py***" script is required to post images on ***Bluesky***. *More info on this script further down the page.*
 
-● ***Reddit*** (***-r option***). While the ***Reddit*** platform has an image upload size limit of **20MB**, the data storage capacity for the cover image is ***much smaller*** and depends on image dimension size.  
+● ***Reddit*** (***-r option***). While ***Reddit*** has a post size limit of **20MB**, the data storage capacity for the cover image is ***much smaller*** and capacity depends on image dimension size.  
 
-For example, a cover image with **1024x1024** dimensions can store only **~6KB** of data, ***2048x2048*** can store **~27KB**, **4096x4096** can store **~109KB** and an image with **6324×6324** max dimensions can store **~254KB**. 
+● ***X-Twitter*** (***-x option***). While ***X-Twitter*** has a post size limit of **5MB**, the data storage capacity for the cover image is ***much smaller*** and capacity depends on image quality and dimension size.  
 
 For platforms such as ***X-Twitter***, ***Reddit*** & ***Tumblr***, which have small data size limits, you may want to focus on data that compresses well, such as text files, etc.  
 
@@ -112,9 +133,9 @@ jdvrif ***mode*** arguments:
   ***conceal*** - Compresses, encrypts and embeds your secret data file within a ***JPG*** cover image.  
   ***recover*** - Decrypts, uncompresses and extracts the concealed data file from a ***JPG*** cover image.
  
-jdvrif ***conceal*** mode ***platform*** options "***-r***" and "***-b***":
+jdvrif ***conceal*** mode ***platform*** options "***-b***", "***-r***" and "***-x***":
 
-To create compatible "*file-embedded*" ***JPG*** images for posting on the ***Reddit*** platform, you must use the ***-r*** option with ***conceal*** mode.
+To create compatible "*data-conclealed*" ***JPG*** images for posting on the ***Reddit*** platform, you must use the ***-r*** option with ***conceal*** mode.
   ```console
   $ jdvrif conceal -r my_image.jpg hidden.doc
 ```
@@ -123,7 +144,16 @@ To create compatible "*file-embedded*" ***JPG*** images for posting on the ***Re
   
   When saving/downloading an image from ***Reddit*** make sure to click on the image within the post to fully expand it before saving.  
 
-https://github.com/user-attachments/assets/9f1b4607-e7f1-4c5f-8929-b42c1a85bb88
+https://github.com/user-attachments/assets/9f1b4607-e7f1-4c5f-8929-b42c1a85bb88  
+
+To create compatible "*data-conclealed*" ***JPG*** images for posting on the ***X-Twitter*** platform using the J-UNIWARD steganography method, you must use the ***-x*** option with ***conceal*** mode.
+  ```console
+  $ jdvrif conceal -x my_image.jpg hidden.doc
+```
+
+  These images are only compatible for posting on ***X-Twitter***. Your embedded data file will be lost if posted on a different platform.  
+  
+  When saving/downloading an image from ***X-Twitter*** make sure to click on the image within the post to fully expand it before saving.  
 
 To create compatible "*file-embedded*" ***JPG*** images for posting on the ***Bluesky*** platform, you must use the ***-b*** option with ***conceal*** mode.
   ```console
