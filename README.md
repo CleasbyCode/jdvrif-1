@@ -169,7 +169,7 @@ In the default and ***-b*** modes, the cover image is also losslessly optimized 
 
 For platforms such as ***X-Twitter***, ***Reddit*** & ***Tumblr***, which have small data size limits, you may want to focus on data that compresses well, such as text files, etc.  
 
-https://github.com/user-attachments/assets/c8c38e6d-ea23-4d67-98d9-cebdcd82b449
+https://github.com/user-attachments/assets/af330d09-f65d-4f75-8290-883078be34b3
 
 https://github.com/user-attachments/assets/fc454d42-0240-4864-b44b-ce5ef7cfd94c
 
@@ -202,7 +202,7 @@ To create compatible "*data-concealed*" ***JPG*** images for posting on the ***R
   
   When saving/downloading an image from ***Reddit*** make sure to click on the image within the post to fully expand it before saving.  
 
-https://github.com/user-attachments/assets/9f1b4607-e7f1-4c5f-8929-b42c1a85bb88  
+https://github.com/user-attachments/assets/ead3c34c-dd9a-4018-9ea3-0746fbdfdb8b
 
 To create compatible "*data-concealed*" ***JPG*** images for posting on the ***X-Twitter*** platform using the J-UNIWARD steganography method, you must use the ***-x*** option with ***conceal*** mode.
   ```console
@@ -241,7 +241,7 @@ To create compatible "*file-embedded*" ***JPG*** images for posting on the ***Bl
 
   See [src/bsky/README.md](https://github.com/CleasbyCode/jdvrif/blob/main/src/bsky/README.md) for the full set of options (*multiple images, replies, quote posts, link cards*) and for what the hardened fork of the script protects against.
 
-https://github.com/user-attachments/assets/b4c72ea7-40e3-49b0-89aa-ae2dd8ccccb9   
+https://github.com/user-attachments/assets/1daef508-d304-491f-bfe2-2cdbb5d62081
 
 ## Tests
 
