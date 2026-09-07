@@ -52,22 +52,28 @@ Security hardening over the original script:
    never share connection state with a later one
 
  * Strict validation of AT URIs, record CIDs, handles, language tags,
-   image files (symlink-safe reads, dimension/pixel limits), and URLs
+   image files (symlink-safe reads, preflight dimensions, bounded full
+   decoding with unchanged upload bytes), and URLs
 
 Setup:
 
- Requires: requests, beautifulsoup4, pillow (with pinned versions in
+ Requires Python 3.10+: requests, beautifulsoup4, pillow (with pinned versions in
  requirements.txt alongside this script)
-    $ pip install -r requirements.txt
+    $ python3 -m pip install -r requirements.txt
 
- Set your credentials as environment variables:
+ Set credentials in an interactive Bash shell with a hidden password prompt,
+ so the password is not typed into a command saved in shell history:
     $ export ATP_AUTH_HANDLE='your-handle.bsky.social'
-    $ export ATP_AUTH_PASSWORD='xxxx-xxxx-xxxx-xxxx'
+    $ read -r -s -p 'Bluesky app password: ' ATP_AUTH_PASSWORD
+    $ printf '\\n'
+    $ export ATP_AUTH_PASSWORD
+
+ Run `unset ATP_AUTH_PASSWORD` when you finish posting.
 
  IMPORTANT: ATP_AUTH_PASSWORD should be an APP password, created at
  https://bsky.app/settings/app-passwords — do NOT use your main Bluesky
  account password. App passwords can be revoked individually and cannot
- change account settings.
+ change authentication settings, though they can publish and manage content.
 
 Examples:
 
@@ -94,6 +100,7 @@ import queue
 import re
 import socket
 import stat
+import subprocess
 import sys
 import tempfile
 import threading
@@ -110,6 +117,7 @@ from urllib.parse import ParseResult, urljoin, urlparse, urlunparse
 
 import idna
 import requests
+from urllib3 import __version__ as _URLLIB3_VERSION
 from requests.adapters import HTTPAdapter
 from urllib3.response import HTTPResponse as _Urllib3Response
 from bs4 import BeautifulSoup
@@ -132,6 +140,11 @@ MAX_EMBED_IMAGE_BYTES = 1_000_000
 MAX_API_RESPONSE_BYTES = 8_000_000
 MAX_IMAGE_PIXELS = 40_000_000
 MAX_IMAGE_DIMENSION = 16_384
+MAX_IMAGE_DECODE_SECONDS = 5.0
+MAX_IMAGE_WORKER_MEMORY_BYTES = 768 * 1024 * 1024
+MAX_IMAGE_WORKER_REPLY_BYTES = 4096
+MAX_IMAGE_FRAMES = 100
+MAX_IMAGE_DECODED_PIXELS = 80_000_000
 MAX_EXTERNAL_TITLE_CHARS = 300
 MAX_EXTERNAL_DESCRIPTION_CHARS = 1_000
 # The app.bsky.embed.images lexicon sets no maxLength on `alt`. This mirrors the
@@ -226,14 +239,10 @@ BSKY_APP_COLLECTIONS = {
 
 EMBED_SOURCE_ATTRS = ("image", "embed_url", "embed_ref")
 
-# Content codings urllib3 unwraps transparently while streaming. Bodies in these
-# codings are safe to accept because the streaming size cap in
-# _read_response_body counts *decoded* bytes, which is exactly where a
-# decompression bomb has to be stopped. Anything outside this set would reach
-# the parser still encoded, so it is refused instead.
-DECODABLE_CONTENT_ENCODINGS = frozenset(
-    {"", "identity"} | set(getattr(_Urllib3Response, "CONTENT_DECODERS", ()))
-)
+# Restrict decoding to zlib-backed codings. Optional Brotli installations can
+# fall back to unbounded decompression even with a patched urllib3 release.
+# Encoded responses additionally require a patched decoder before any read.
+DECODABLE_CONTENT_ENCODINGS = frozenset({"", "identity", "gzip", "x-gzip", "deflate"})
 
 
 def _terminal_safe(text: Any) -> str:
@@ -262,6 +271,18 @@ class DeadlineExceeded(requests.Timeout):
     """
 
 
+class _NoRedirectSession(requests.Session):
+    """Leave redirects entirely to this script, including their unread bodies.
+
+    Requests otherwise consumes a redirect body while constructing Response.next
+    even with stream=True and allow_redirects=False, before our byte limits or
+    redirect policy can inspect the response.
+    """
+
+    def resolve_redirects(self, resp, req, **kwargs):
+        return iter(())
+
+
 def _new_session() -> requests.Session:
     """Build a Session used by exactly one request.
 
@@ -269,7 +290,7 @@ def _new_session() -> requests.Session:
     deadline can never be sharing connection state with a later request. That is
     what makes it safe for callers to catch a timeout and carry on.
     """
-    session = requests.Session()
+    session = _NoRedirectSession()
     session.headers["User-Agent"] = USER_AGENT
     session.headers["Accept-Encoding"] = "identity"
     session.trust_env = False
@@ -792,12 +813,18 @@ def _declared_content_length(resp: requests.Response) -> Optional[int]:
         return None
 
 
+def _urllib3_has_bounded_decoding() -> bool:
+    # Fail closed on older and unrecognized versions, including prereleases.
+    # Before 2.7.0, streaming decoders can allocate the expanded body before
+    # Requests yields a chunk to the caller's size check.
+    version = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", _URLLIB3_VERSION)
+    return version is not None and tuple(map(int, version.groups())) >= (2, 7, 0)
+
+
 def _read_response_body(resp: requests.Response, max_bytes: int) -> bytes:
-    # Requests are sent with `Accept-Encoding: identity`, but servers do ignore
-    # that, so accept anything urllib3 unwraps for us and refuse only codings
-    # that would reach the caller still encoded. This costs nothing in
-    # decompression-bomb terms: iter_content() yields *decoded* bytes, so the
-    # streaming cap below is applied where a bomb actually has to be stopped.
+    # Accept-Encoding is advisory: validate the actual response coding before
+    # reading. With a patched decoder, the chunk limit also bounds allocation
+    # inside urllib3 instead of merely checking an already-expanded body.
     content_encoding = resp.headers.get("Content-Encoding", "").strip().lower()
     if content_encoding not in DECODABLE_CONTENT_ENCODINGS:
         raise ValueError(
@@ -805,6 +832,11 @@ def _read_response_body(resp: requests.Response, max_bytes: int) -> bytes:
             f"{content_encoding!r}"
         )
     is_encoded = content_encoding not in ("", "identity")
+    if is_encoded and not _urllib3_has_bounded_decoding():
+        raise ValueError(
+            "Refusing compressed response: urllib3 2.7.0 or newer is required "
+            "for bounded decompression"
+        )
 
     # Content-Length describes the encoded body, so it only bounds the decoded
     # size when no coding was applied.
@@ -1171,16 +1203,21 @@ def _valid_tag_value(tag: str) -> bool:
         not tag
         or len(tag.encode("UTF-8")) > MAX_TAG_BYTES
         or any(character in TAG_FORBIDDEN_CHARACTERS for character in tag)
-        or any(unicodedata.category(character).startswith("C") for character in tag)
+        or any(
+            unicodedata.category(character).startswith(("C", "Z"))
+            for character in tag
+        )
     ):
         return False
-    # Combining marks extend the preceding cluster. Other multi-codepoint
-    # clusters (flags, Hangul, emoji modifiers) remain deliberately overcounted,
-    # so this cannot admit a tag above the server's grapheme limit.
+    # Only nonspacing/enclosing marks can safely be discounted here. Spacing
+    # marks (Mc) include exceptions such as U+102B that start new graphemes.
+    # With controls/separators excluded above, Mn/Me join the preceding cluster;
+    # a leading run of marks still counts once. Other multi-codepoint clusters
+    # (flags, Hangul, emoji modifiers) remain conservatively overcounted.
     grapheme_upper_bound = sum(
-        not unicodedata.category(character).startswith("M")
+        unicodedata.category(character) not in ("Mn", "Me")
         for character in tag
-    ) + int(unicodedata.category(tag[0]).startswith("M"))
+    ) + int(unicodedata.category(tag[0]) in ("Mn", "Me"))
     if grapheme_upper_bound > MAX_TAG_GRAPHEMES:
         return False
     return any(
@@ -1538,27 +1575,195 @@ def _validate_image_dimensions(width: int, height: int) -> None:
         )
 
 
+def _preflight_webp_dimensions(img_bytes: bytes) -> None:
+    """Check the RIFF canvas before libwebp can allocate animation buffers."""
+    if len(img_bytes) < 20:
+        raise ValueError("Truncated WebP container")
+    container_end = int.from_bytes(img_bytes[4:8], "little") + 8
+    if container_end < 20 or container_end > len(img_bytes):
+        raise ValueError("Invalid WebP container length")
+    position = 12
+    first_chunk = True
+    while position < container_end:
+        if container_end - position < 8:
+            raise ValueError("Truncated WebP chunk header")
+        chunk_type = img_bytes[position:position + 4]
+        chunk_size = int.from_bytes(img_bytes[position + 4:position + 8], "little")
+        payload = position + 8
+        chunk_end = payload + chunk_size
+        next_position = chunk_end + (chunk_size & 1)
+        if next_position > container_end:
+            raise ValueError("Truncated WebP chunk")
+        if first_chunk:
+            if chunk_type == b"VP8X" and chunk_size == 10:
+                width = 1 + int.from_bytes(img_bytes[payload + 4:payload + 7], "little")
+                height = 1 + int.from_bytes(img_bytes[payload + 7:payload + 10], "little")
+            elif chunk_type == b"VP8 " and chunk_size >= 10:
+                if img_bytes[payload + 3:payload + 6] != b"\x9d\x01\x2a":
+                    raise ValueError("Invalid WebP frame header")
+                width = int.from_bytes(img_bytes[payload + 6:payload + 8], "little") & 0x3FFF
+                height = int.from_bytes(img_bytes[payload + 8:payload + 10], "little") & 0x3FFF
+            elif chunk_type == b"VP8L" and chunk_size >= 5 and img_bytes[payload] == 0x2F:
+                packed = int.from_bytes(img_bytes[payload + 1:payload + 5], "little")
+                width = 1 + (packed & 0x3FFF)
+                height = 1 + ((packed >> 14) & 0x3FFF)
+            else:
+                raise ValueError("WebP container has no valid initial image header")
+            _validate_image_dimensions(width, height)
+            first_chunk = False
+        elif chunk_type == b"VP8X":
+            raise ValueError("WebP container has a misplaced canvas header")
+        position = next_position
+
+
+def _preflight_image(img_bytes: bytes) -> str:
+    if not img_bytes or len(img_bytes) > MAX_IMAGE_SIZE_BYTES:
+        raise ValueError(f"Image must contain 1 to {MAX_IMAGE_SIZE_BYTES:,} bytes")
+    if img_bytes.startswith(b"\xff\xd8\xff"):
+        return "JPEG"
+    if img_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "PNG"
+    if img_bytes.startswith((b"GIF87a", b"GIF89a")):
+        return "GIF"
+    if img_bytes[:4] == b"RIFF" and img_bytes[8:12] == b"WEBP":
+        _preflight_webp_dimensions(img_bytes)
+        return "WEBP"
+    raise ValueError("Unsupported or invalid image format; expected JPEG, PNG, GIF, or WebP")
+
+
+def _inspect_image_decoded(img_bytes: bytes) -> Dict[str, Any]:
+    """Run only in the bounded worker; never rewrite the supplied image."""
+    image_format = _preflight_image(img_bytes)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", Image.DecompressionBombWarning)
+        # verify checks container integrity (including PNG chunk CRCs), but is
+        # a no-op for some formats such as JPEG, so a full decode follows it.
+        with Image.open(io.BytesIO(img_bytes), formats=[image_format]) as img:
+            _validate_image_dimensions(*img.size)
+            img.verify()
+        # Some plugins retain native canvases until the image object is freed.
+        del img
+        with Image.open(io.BytesIO(img_bytes), formats=[image_format]) as img:
+            width, height = img.size
+            _validate_image_dimensions(width, height)
+            frame_count = getattr(img, "n_frames", 1)
+            if frame_count > MAX_IMAGE_FRAMES:
+                raise ValueError(f"Image exceeds the {MAX_IMAGE_FRAMES}-frame limit")
+            decoded_pixels = 0
+            orientation = 1
+            for frame in range(frame_count):
+                img.seek(frame)
+                _validate_image_dimensions(*img.size)
+                decoded_pixels += img.width * img.height
+                if decoded_pixels > MAX_IMAGE_DECODED_PIXELS:
+                    raise ValueError("Image exceeds the total decoded-pixel limit")
+                img.load()
+                if frame == 0:
+                    orientation = img.getexif().get(274, 1)
+    # EXIF rotations/transpositions change display dimensions. The uploaded
+    # bytes remain untouched so ICC payloads and JPEG coefficients survive.
+    if orientation in (5, 6, 7, 8):
+        width, height = height, width
+    return {"width": width, "height": height, "mimetype": IMAGE_FORMAT_MIMETYPES[image_format]}
+
+
+def _image_worker_main() -> None:
+    try:
+        img_bytes = sys.stdin.buffer.read(MAX_IMAGE_SIZE_BYTES + 1)
+        result = {"image": _inspect_image_decoded(img_bytes)}
+    except Exception as exc:
+        # Keep even malformed metadata errors within the bounded reply file.
+        result = {"error": f"{type(exc).__name__}: {str(exc)[:300]}"}
+    sys.stdout.buffer.write(json.dumps(result, ensure_ascii=True).encode("ascii"))
+
+
+_IMAGE_WORKER_LAUNCHER = """\
+import sys
+try:
+    import resource
+except ImportError:
+    resource = None
+if resource is not None:
+    for name, requested in (("RLIMIT_AS", int(sys.argv[2])),
+                            ("RLIMIT_CPU", int(sys.argv[3])),
+                            ("RLIMIT_FSIZE", int(sys.argv[4]))):
+        if hasattr(resource, name):
+            kind = getattr(resource, name)
+            _, hard = resource.getrlimit(kind)
+            limit = requested if hard == resource.RLIM_INFINITY else min(requested, hard)
+            resource.setrlimit(kind, (limit, limit))
+import json, runpy
+sys.path[:] = json.loads(sys.argv[5])
+runpy.run_path(sys.argv[1], run_name="bsky_image_worker")["_image_worker_main"]()
+"""
+
+
+def _inspect_image_in_worker(img_bytes: bytes) -> Dict[str, Any]:
+    # Isolate Python startup from the caller's working directory, environment,
+    # and site hooks. Restore the parent's explicit import directories only
+    # after limits are installed, so pip --user and virtualenv installs work
+    # without adding -c's implicit current-directory import entry.
+    working_directory = Path.cwd().resolve()
+    import_paths = [
+        str(Path(entry).resolve()) for entry in sys.path
+        if entry and Path(entry).resolve() != working_directory
+    ]
+    command = [
+        sys.executable, "-I", "-S", "-B", "-c", _IMAGE_WORKER_LAUNCHER,
+        str(Path(__file__).resolve()), str(MAX_IMAGE_WORKER_MEMORY_BYTES),
+        str(math.ceil(MAX_IMAGE_DECODE_SECONDS)), str(MAX_IMAGE_WORKER_REPLY_BYTES),
+        json.dumps(import_paths),
+    ]
+    # The child needs Python's installation settings, not posting credentials
+    # or the parent process's other application secrets.
+    environment = {
+        key: os.environ[key]
+        for key in ("PATH", "SYSTEMROOT", "WINDIR", "LANG", "LC_ALL")
+        if key in os.environ
+    }
+    environment["PYTHONIOENCODING"] = "utf-8"
+    # A regular anonymous file permits RLIMIT_FSIZE to bound the child's reply;
+    # stderr is discarded rather than accumulating native decoder diagnostics.
+    with tempfile.TemporaryFile() as reply:
+        try:
+            completed = subprocess.run(
+                command, input=img_bytes, stdout=reply, stderr=subprocess.DEVNULL,
+                env=environment, timeout=MAX_IMAGE_DECODE_SECONDS, check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise ValueError("Image validation exceeded its time limit") from exc
+        except OSError as exc:
+            raise ValueError("Could not start bounded image validation") from exc
+        if completed.returncode != 0:
+            raise ValueError("Image decoder failed or exceeded its resource limits")
+        reply.seek(0)
+        encoded = reply.read(MAX_IMAGE_WORKER_REPLY_BYTES + 1)
+    if len(encoded) > MAX_IMAGE_WORKER_REPLY_BYTES:
+        raise ValueError("Image decoder returned an oversized result")
+    try:
+        result = json.loads(encoded)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Image decoder returned an invalid result") from exc
+    if not isinstance(result, dict):
+        raise ValueError("Image decoder returned an invalid result")
+    if isinstance(result.get("error"), str):
+        raise ValueError(result["error"])
+    info = result.get("image")
+    if not isinstance(info, dict) or type(info.get("width")) is not int or type(info.get("height")) is not int:
+        raise ValueError("Image decoder returned invalid dimensions")
+    _validate_image_dimensions(info["width"], info["height"])
+    if info.get("mimetype") not in IMAGE_FORMAT_MIMETYPES.values():
+        raise ValueError("Image decoder returned an invalid MIME type")
+    return info
+
+
 def inspect_image(img_bytes: bytes, source: str) -> Dict[str, Any]:
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", Image.DecompressionBombWarning)
-            with Image.open(io.BytesIO(img_bytes)) as img:
-                width, height = img.size
-                image_format = img.format
-                _validate_image_dimensions(width, height)
-                img.verify()
-    except (
-        UnidentifiedImageError,
-        OSError,
-        Image.DecompressionBombError,
-        Image.DecompressionBombWarning,
-    ) as exc:
+        # This check runs before even starting a native decoder process.
+        _preflight_image(img_bytes)
+        return _inspect_image_in_worker(img_bytes)
+    except (OSError, ValueError) as exc:
         raise ValueError(f"Invalid image {source!r}: {exc}") from exc
-
-    mimetype = IMAGE_FORMAT_MIMETYPES.get(str(image_format))
-    if mimetype is None:
-        raise ValueError(f"Unsupported image format for {source!r}: {image_format!r}")
-    return {"width": width, "height": height, "mimetype": mimetype}
 
 
 def upload_file(
@@ -1707,12 +1912,11 @@ def _extends_previous_cluster(character: str) -> bool:
 
 
 def _grapheme_safe_prefix(text: str, limit: int) -> str:
-    """Return at most `limit` code points without splitting a grapheme cluster.
+    """Return at most `limit` code points with best-effort boundary adjustments.
 
-    This is a conservative, stdlib-only approximation (regional-indicator flag
-    pairs, for example, are not tracked); the PDS enforces the authoritative
-    grapheme count, so this only needs to avoid emitting an obviously broken
-    cluster at the truncation boundary.
+    This stdlib-only approximation handles combining marks and dangling ZWJs.
+    It can still split emoji modifier sequences, joined emoji, and regional-
+    indicator flags; it is not full Unicode grapheme segmentation.
     """
     if len(text) <= limit:
         return text
@@ -1748,7 +1952,25 @@ def _meta_content(soup: BeautifulSoup, property_name: str) -> str:
 
 
 def _page_title(soup: BeautifulSoup) -> str:
-    return soup.title.string if soup.title and isinstance(soup.title.string, str) else ""
+    title = soup.find("title")
+    if title is None:
+        return ""
+    # Tag.string recurses through single-child tags. Walk text iteratively so
+    # deeply nested markup cannot exhaust the Python stack, and stop copying
+    # after enough characters to apply the normal card-title truncation.
+    parts: List[str] = []
+    remaining = MAX_EXTERNAL_TITLE_CHARS + 1
+    for text in title.strings:
+        if not parts:
+            text = text.lstrip()
+        if not text:
+            continue
+        part = text[:remaining]
+        parts.append(part)
+        remaining -= len(part)
+        if remaining == 0:
+            break
+    return "".join(parts)
 
 
 def _external_card_metadata(url: str, soup: BeautifulSoup) -> Dict[str, Any]:
@@ -1777,9 +1999,8 @@ def _attach_external_thumb(
     pds_url: str,
     access_token: str,
     page_url: str,
-    soup: BeautifulSoup,
+    img_url: str,
 ) -> None:
-    img_url = _meta_content(soup, "og:image")
     if not img_url:
         return
 
@@ -1815,8 +2036,12 @@ def _attach_external_thumb(
         warn_and_skip_thumb(exc)
 
 
-def _parse_embed_html(html_bytes: bytes, content_type: Optional[str]) -> BeautifulSoup:
-    """Parse link-card HTML under a wall-clock budget.
+def _parse_embed_metadata(
+    url: str,
+    html_bytes: bytes,
+    content_type: Optional[str],
+) -> tuple[Dict[str, Any], str]:
+    """Parse HTML and extract all link-card metadata under one wall-clock budget.
 
     `_safe_download` releases its deadline when it returns, so without this the
     parse is the one unbounded step in building a card. On timeout the worker is
@@ -1824,23 +2049,24 @@ def _parse_embed_html(html_bytes: bytes, content_type: Optional[str]) -> Beautif
     a bare card; the abandoned thread finishes on its own, bounded by
     MAX_EMBED_HTML_BYTES, and is a daemon so it never delays exit.
     """
-    def parse() -> BeautifulSoup:
+    def parse() -> tuple[Dict[str, Any], str]:
         # Prefer the server-declared charset; BeautifulSoup still falls back to
         # a BOM, an in-document <meta charset>, and byte sniffing when it is
         # absent or wrong, so a page served in a non-UTF-8 encoding is decoded
         # correctly.
-        return BeautifulSoup(
+        soup = BeautifulSoup(
             html_bytes,
             "html.parser",
             from_encoding=_charset_from_content_type(content_type),
         )
+        return _external_card_metadata(url, soup), _meta_content(soup, "og:image")
 
     subject_token = _NETWORK_TIMEOUT_SUBJECT.set("Link card")
     try:
         return _run_before_download_deadline(
             parse,
             time.monotonic() + MAX_EMBED_PARSE_SECONDS,
-            "parsing the linked page",
+            "parsing the linked page and its metadata",
         )
     finally:
         _NETWORK_TIMEOUT_SUBJECT.reset(subject_token)
@@ -1857,9 +2083,8 @@ def fetch_embed_url_card(pds_url: str, access_token: str, url: str) -> Dict:
             url,
             MAX_EMBED_HTML_BYTES,
         )
-        soup = _parse_embed_html(html_bytes, content_type)
-        card = _external_card_metadata(url, soup)
-    except (requests.RequestException, ValueError) as exc:
+        card, image_url = _parse_embed_metadata(url, html_bytes, content_type)
+    except (requests.RequestException, ValueError, RecursionError) as exc:
         print(
             f"warning: could not read {_url_for_log(url)!r} for the link card "
             f"({type(exc).__name__}: {_terminal_safe(exc)}); "
@@ -1868,7 +2093,7 @@ def fetch_embed_url_card(pds_url: str, access_token: str, url: str) -> Dict:
         )
         return {"$type": "app.bsky.embed.external", "external": card}
 
-    _attach_external_thumb(card, pds_url, access_token, final_url, soup)
+    _attach_external_thumb(card, pds_url, access_token, final_url, image_url)
     return {"$type": "app.bsky.embed.external", "external": card}
 
 
@@ -2104,6 +2329,45 @@ def test_parse_hashtags():
     ])
 
 
+def test_hashtag_grapheme_limit_keeps_invalid_tags_plaintext():
+    # U+102B has category Mc but GCB=Other, so every occurrence starts a
+    # separate grapheme. The complete post is comfortably below 300 graphemes.
+    oversized_tag = "x" + "\u102b" * 65
+    text = "hello #" + oversized_tag + " #ok"
+    _check(len(text) < 300)
+    _validate_text_length(text)
+    args = argparse.Namespace(text=text, lang=None, reply_to=None,
+                              pds_url="https://pds.example")
+    record = _build_post_record(args)
+    _check_equal(record["text"], text)
+    _check_equal(record["facets"], [{
+        "index": {"byteStart": len(text[:-3].encode("UTF-8")),
+                  "byteEnd": len(text.encode("UTF-8"))},
+        "features": [{"$type": "app.bsky.richtext.facet#tag", "tag": "ok"}],
+    }])
+
+
+def test_hashtag_grapheme_boundaries():
+    for letter in ("a", "\u102b", "\u102c", "\u1038", "\u1a61", "\U0001f600"):
+        _check(_valid_tag_value(letter * 64))
+        _check(not _valid_tag_value(letter * 65))
+
+    # Preserve ordinary decomposed accents and enclosing marks even when the
+    # codepoint count exceeds 64. A leading cluster of marks also counts once.
+    for combining_mark in ("\u0301", "\u20dd"):
+        _check(_valid_tag_value(("e" + combining_mark) * 64))
+        _check(not _valid_tag_value(("e" + combining_mark) * 65))
+        _check(_valid_tag_value(combining_mark * 65))
+        _check(_valid_tag_value(combining_mark + "a" * 63))
+        _check(not _valid_tag_value(combining_mark + "a" * 64))
+    _check_equal(parse_hashtags("#cafe\u0301 #\U0001f44d\U0001f3fd"), [
+        {"start": 0, "end": 7, "tag": "cafe\u0301"},
+        {"start": 8, "end": 17, "tag": "\U0001f44d\U0001f3fd"},
+    ])
+    for separator in ("\n", "\u2028", "\u2029"):
+        _check(not _valid_tag_value("a" + separator + "\u0301"))
+
+
 def test_parse_facets_skips_overlaps():
     calls = []
 
@@ -2311,8 +2575,8 @@ def test_open_pinned_response_uses_validated_ip():
         sessions.append(session)
         return session
 
-    with _patched_globals(_public_url_addresses=fake_resolver), _patched_attr(
-        requests, "Session", fake_session_factory
+    with _patched_globals(_public_url_addresses=fake_resolver), _patched_globals(
+        _NoRedirectSession=fake_session_factory
     ):
         with _open_pinned_response(
             "https://example.com:8443/path",
@@ -2514,11 +2778,11 @@ def test_embed_thumbnail_uses_final_page_url():
             "text/html; charset=utf-8",
         )
 
-    def fake_attach(_card, _pds_url, _access_token, page_url, soup):
+    def fake_attach(_card, _pds_url, _access_token, page_url, image_url):
         attached["page_url"] = page_url
         attached["image_url"] = _absolute_url(
             page_url,
-            _meta_content(soup, "og:image"),
+            image_url,
         )
 
     with _patched_globals(
@@ -2545,10 +2809,6 @@ def test_thumbnail_failures_are_non_fatal():
     abandoned worker cannot be sharing state with the createRecord call that
     follows.
     """
-    soup = BeautifulSoup(
-        b'<meta property="og:image" content="https://cdn.example/thumb.png">',
-        "html.parser",
-    )
     originals = {
         name: globals()[name]
         for name in ("_safe_download", "inspect_image", "upload_file")
@@ -2562,7 +2822,7 @@ def test_thumbnail_failures_are_non_fatal():
                 "https://pds.example",
                 "token",
                 "https://example.com/",
-                soup,
+                "https://cdn.example/thumb.png",
             )
 
     def raise_timeout(*_args, **_kwargs):
@@ -2642,6 +2902,202 @@ def test_inspect_image():
         inspect_image(b"not an image", "broken.png")
 
 
+def test_inspect_image_rejects_webp_canvas_before_decoder():
+    # A real 204-byte, two-frame 2x2 WebP from Pillow/libwebp. Its VP8X
+    # canvas alone used to allocate roughly 488 MiB before the pixel check.
+    original = base64.b64decode(
+        "UklGRsQAAABXRUJQVlA4WAoAAAACAAAAAQAAAQAAQU5JTQYAAAAAAAAAAABBTk1GSgAA"
+        "AAAAAAAAAAEAAAEAAGQAAAJWUDggMgAAADABAJ0BKgIAAgABQCYloAADcAD+8ut///mw"
+        "P/bz/wR6Af//0uD//pcH//S4P/SkAAAAQU5NRkYAAAAAAAAAAAABAAABAABkAAAAVlA4"
+        "IC4AAAA0AQCdASoCAAIAAAAmJaAAA3AA/vtV4///S4P/+lwf/9Lg/9Lg//rV5Vesq6AA"
+    )
+    _check_equal(len(original), 204)
+    _check_equal(inspect_image(original, "small.webp"), {
+        "width": 2, "height": 2, "mimetype": "image/webp",
+    })
+    oversized = bytearray(original)
+    oversized[24:27] = (8000 - 1).to_bytes(3, "little")
+    oversized[27:30] = (8000 - 1).to_bytes(3, "little")
+
+    def forbidden_decoder(_image: bytes):
+        raise AssertionError("oversized WebP reached the native decoder worker")
+
+    with _patched_globals(_inspect_image_in_worker=forbidden_decoder):
+        with _check_raises(ValueError, "oversized canvas was accepted", contains="too many pixels"):
+            inspect_image(bytes(oversized), "oversized.webp")
+        with _check_raises(ValueError, "truncated RIFF was accepted", contains="container length"):
+            inspect_image(original[:-1], "truncated.webp")
+
+
+def test_inspect_image_rejects_truncated_jpeg():
+    buf = io.BytesIO()
+    Image.new("RGB", (128, 128), "red").save(buf, format="JPEG")
+    original = buf.getvalue()
+    _check_equal(len(original), 885)
+    _check_equal(inspect_image(original, "complete.jpg"), {
+        "width": 128, "height": 128, "mimetype": "image/jpeg",
+    })
+    for truncated in (original[:-2], original[:664]):
+        with _check_raises(ValueError, "truncated JPEG was accepted", contains="truncated"):
+            inspect_image(truncated, "truncated.jpg")
+
+
+def test_inspect_image_exif_dimensions_and_upload_preserve_bytes():
+    originals = {}
+    for orientation in range(1, 9):
+        exif = Image.Exif()
+        exif[274] = orientation
+        buf = io.BytesIO()
+        Image.new("RGB", (8, 3), "red").save(
+            buf, format="JPEG", exif=exif,
+            icc_profile=b"opaque jdvrif payload\x00\x01" * 20,
+        )
+        encoded = buf.getvalue()
+        originals[orientation] = encoded
+        expected_width, expected_height = (3, 8) if orientation >= 5 else (8, 3)
+        _check_equal(inspect_image(encoded, f"orientation-{orientation}.jpg"), {
+            "width": expected_width, "height": expected_height, "mimetype": "image/jpeg",
+        })
+
+    uploaded = []
+
+    def fake_upload(_pds: str, _token: str, encoded: bytes, mimetype: str) -> Dict:
+        uploaded.append((encoded, mimetype))
+        return {"$type": "blob", "ref": {"$link": "test-image"}}
+
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "oriented.jpg"
+        # Preserve both ICC data and arbitrary transport bytes; correction of
+        # the display ratio must never re-encode a steganographic carrier.
+        original = originals[6] + b"\x00unmodified transport payload\xff"
+        path.write_bytes(original)
+        with _patched_globals(upload_file=fake_upload):
+            embed = upload_images("https://pds.example", "test-token", [str(path)])
+        _check_equal(uploaded, [(original, "image/jpeg")])
+        _check_equal(embed["images"][0]["aspectRatio"], {"width": 3, "height": 8})
+        _check_equal(path.read_bytes(), original)
+
+
+def test_inspect_image_animation_budgets():
+    frames = [Image.new("RGB", (2, 3), color) for color in ("red", "blue", "green")]
+    buf = io.BytesIO()
+    frames[0].save(buf, format="GIF", save_all=True, append_images=frames[1:], duration=10)
+    animated = buf.getvalue()
+    _check_equal(inspect_image(animated, "small.gif"), {
+        "width": 2, "height": 3, "mimetype": "image/gif",
+    })
+    # Exercise the actual decoder loop with a small equivalent pixel budget.
+    # The production worker passes the same immutable input to this function.
+    with _patched_globals(MAX_IMAGE_DECODED_PIXELS=12), _check_raises(
+        ValueError, "animation exceeded its decoded-pixel budget", contains="decoded-pixel limit"
+    ):
+        _inspect_image_decoded(animated)
+
+    buf = io.BytesIO()
+    repeated = [frames[index % 2] for index in range(MAX_IMAGE_FRAMES + 1)]
+    repeated[0].save(buf, format="GIF", save_all=True, append_images=repeated[1:], duration=10)
+    with _check_raises(ValueError, "animation exceeded its frame budget", contains="frame limit"):
+        inspect_image(buf.getvalue(), "too-many-frames.gif")
+
+
+def test_inspect_image_worker_timeout_reaps_process_without_credentials():
+    buf = io.BytesIO()
+    Image.new("RGB", (2, 3)).save(buf, format="PNG")
+    processes = []
+    original_popen = subprocess.Popen
+
+    def recording_popen(*args, **kwargs):
+        _check("ATP_AUTH_PASSWORD" not in kwargs["env"], "worker inherited posting credentials")
+        _check("AWS_SECRET_ACCESS_KEY" not in kwargs["env"], "worker inherited unrelated credentials")
+        process = original_popen(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    test_environment = dict(os.environ, ATP_AUTH_PASSWORD="must-not-reach-worker",
+                            AWS_SECRET_ACCESS_KEY="must-not-reach-worker")
+    with _patched_attr(os, "environ", test_environment), _patched_attr(
+        subprocess, "Popen", recording_popen
+    ), _patched_globals(
+        _IMAGE_WORKER_LAUNCHER="import time; time.sleep(30)",
+        MAX_IMAGE_DECODE_SECONDS=0.1,
+    ), _check_raises(ValueError, "image worker exceeded its deadline", contains="time limit"):
+        inspect_image(buf.getvalue(), "slow.png")
+    _check_equal(len(processes), 1)
+    _check(processes[0].poll() is not None, "timed-out image worker was not reaped")
+
+
+def test_inspect_image_worker_storage_failures_skip_thumbnail():
+    buf = io.BytesIO()
+    Image.new("RGB", (2, 3)).save(buf, format="PNG")
+    encoded = buf.getvalue()
+
+    class FailedReply:
+        def __init__(self, stage):
+            self.stage = stage
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def seek(self, _offset):
+            if self.stage == "seek":
+                raise OSError(errno.EIO, "reply seek failed")
+
+        def read(self, _size):
+            raise OSError(errno.EIO, "reply read failed")
+
+    def fake_download(*_args):
+        return encoded, "https://cdn.example/thumb.png", "image/png"
+
+    def forbidden_upload(*_args):
+        raise AssertionError("failed image validation attempted a thumbnail upload")
+
+    for stage in ("create", "seek", "read"):
+        def failed_temporary_file():
+            if stage == "create":
+                raise OSError(errno.ENOSPC, "temporary storage unavailable")
+            return FailedReply(stage)
+
+        card: Dict = {}
+        with _patched_attr(tempfile, "TemporaryFile", failed_temporary_file), _patched_attr(
+            subprocess, "run", lambda *_a, **_k: type("Completed", (), {"returncode": 0})()
+        ), _patched_globals(_safe_download=fake_download, upload_file=forbidden_upload):
+            with _check_raises(ValueError, f"worker {stage} failure escaped validation"):
+                inspect_image(encoded, "test.png")
+            with _patched_attr(sys, "stderr", io.StringIO()) as captured_stderr:
+                _attach_external_thumb(
+                    card, "https://pds.example", "test-token", "https://example.com/",
+                    "https://cdn.example/thumb.png",
+                )
+                warning = captured_stderr.getvalue()
+        _check("thumb" not in card, "failed validation attached a thumbnail")
+        _check("posting the card without it" in warning, warning)
+
+
+def test_image_worker_ignores_caller_directory_modules():
+    buf = io.BytesIO()
+    Image.new("RGB", (2, 3)).save(buf, format="PNG")
+    original_run = subprocess.run
+    with tempfile.TemporaryDirectory() as directory:
+        # The main script imports relative to its own directory. A child using
+        # plain -c would instead import these files from the caller's directory.
+        for name in ("requests.py", "runpy.py", "sitecustomize.py"):
+            (Path(directory) / name).write_text(
+                "raise RuntimeError('untrusted caller directory was imported')\n",
+                encoding="utf-8",
+            )
+
+        def from_caller_directory(*args, **kwargs):
+            return original_run(*args, cwd=directory, **kwargs)
+
+        with _patched_attr(subprocess, "run", from_caller_directory):
+            _check_equal(inspect_image(buf.getvalue(), "image.png"), {
+                "width": 2, "height": 3, "mimetype": "image/png",
+            })
+
+
 def test_read_image_file_rejects_symlinks():
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
@@ -2702,19 +3158,18 @@ def test_read_response_body_content_encodings():
             # iter_content yields decoded bytes, so the cap applies post-decode.
             yield b"decoded"
 
-    # urllib3 unwraps gzip/deflate transparently, so those bodies are usable.
-    for encoding in ("", "identity", "gzip", "GZIP", " deflate "):
-        _check_equal(_read_response_body(FakeResponse(encoding), 16), b"decoded")
+    # These responses already contain decoded chunks; exercise the caller's
+    # accounting independently from the real-decoder regression below.
+    with _patched_globals(_urllib3_has_bounded_decoding=lambda: True):
+        for encoding in ("", "identity", "gzip", "GZIP", "x-gzip", " deflate "):
+            _check_equal(_read_response_body(FakeResponse(encoding), 16), b"decoded")
 
-    # A declared length describes the *encoded* body, so it must not be used as
-    # a decoded-size bound when a coding was applied.
-    _check_equal(_read_response_body(FakeResponse("gzip", "999999"), 16), b"decoded")
-    with _check_raises(ValueError, "expected declared oversized identity body to fail"):
-        _read_response_body(FakeResponse("identity", "999999"), 16)
-
-    # The streaming cap still stops a body that inflates past the limit.
-    with _check_raises(ValueError, "expected oversized decoded body to fail"):
-        _read_response_body(FakeResponse("gzip"), 3)
+        # Content-Length describes encoded bytes, not decoded bytes.
+        _check_equal(_read_response_body(FakeResponse("gzip", "999999"), 16), b"decoded")
+        with _check_raises(ValueError, "expected declared oversized identity body to fail"):
+            _read_response_body(FakeResponse("identity", "999999"), 16)
+        with _check_raises(ValueError, "expected oversized decoded body to fail"):
+            _read_response_body(FakeResponse("gzip"), 3)
 
     # Anything urllib3 cannot unwrap would reach the parser still encoded.
     with _check_raises(ValueError, "expected undecodable Content-Encoding to fail"):
@@ -2843,29 +3298,74 @@ def test_terminal_safe_neutralizes_control_characters():
 
 
 def test_embed_html_parse_is_budgeted():
-    """The link-card parse runs under a deadline, not unbounded after download."""
+    """Parsing and metadata traversal share the same deadline."""
     calls = []
     original = _run_before_download_deadline
+    original_metadata = _external_card_metadata
+    in_budget = [False]
 
     def recording(action, deadline, operation, **kwargs):
         calls.append((deadline, operation))
-        return original(action, deadline, operation, **kwargs)
+        def budgeted_action():
+            in_budget[0] = True
+            try:
+                return action()
+            finally:
+                in_budget[0] = False
+        return original(budgeted_action, deadline, operation, **kwargs)
 
-    with _patched_globals(_run_before_download_deadline=recording):
+    def metadata(url, soup):
+        _check(in_budget[0], "metadata extraction escaped the parsing budget")
+        return original_metadata(url, soup)
+
+    with _patched_globals(
+        _run_before_download_deadline=recording,
+        _external_card_metadata=metadata,
+    ):
         started = time.monotonic()
-        soup = _parse_embed_html(
-            b"<html><head><meta property='og:title' content='T'></head></html>",
+        card, thumb = _parse_embed_metadata(
+            "https://example.com/",
+            b"<html><head><meta property='og:title' content='T'>"
+            b"<meta property='og:image' content='/thumb.png'></head></html>",
             "text/html; charset=utf-8",
         )
 
-    _check_equal(_meta_content(soup, "og:title"), "T")
+    _check_equal(card["title"], "T")
+    _check_equal(thumb, "/thumb.png")
     _check_equal(len(calls), 1)
     deadline, operation = calls[0]
-    _check_equal(operation, "parsing the linked page")
+    _check_equal(operation, "parsing the linked page and its metadata")
     _check(
         0 < deadline - started <= MAX_EMBED_PARSE_SECONDS + 1,
         "parse deadline was not derived from MAX_EMBED_PARSE_SECONDS",
     )
+
+
+def test_nested_page_titles_are_bounded():
+    html = (b"<html><head><title>" + b"<span>" * 1200 + b"Nested title"
+            + b"</span>" * 1200 + b"</title></head></html>")
+    with _patched_globals(
+        _safe_download=lambda *_a: (html, "https://example.com/", "text/html"),
+    ):
+        embed = fetch_embed_url_card("https://pds.example", "token", "https://example.com/")
+    _check_equal(embed["external"]["title"], "Nested title")
+
+    card, _ = _parse_embed_metadata(
+        "https://example.com/", b"<title>" + b"a" * 100_000 + b"</title>", "text/html"
+    )
+    _check_equal(card["title"], "a" * MAX_EXTERNAL_TITLE_CHARS)
+
+
+def test_embed_metadata_failures_degrade():
+    def fail_metadata(*_args):
+        raise RecursionError("pathological markup")
+
+    with _patched_globals(
+        _safe_download=lambda *_a: (b"<title>text</title>", "https://example.com/", "text/html"),
+        _external_card_metadata=fail_metadata,
+    ), _patched_attr(sys, "stderr", io.StringIO()):
+        embed = fetch_embed_url_card("https://pds.example", "token", "https://example.com/")
+    _check_equal(embed["external"], {"uri": "https://example.com/", "title": "", "description": ""})
 
 
 def test_nat64_addresses_follow_their_embedded_ipv4():
@@ -2923,6 +3423,133 @@ def test_cashtag_span_matches_text_as_typed():
     span = spans[0]
     _check_equal(span["tag"], "$TSLA")
     _check_equal(raw[span["start"]:span["end"]].decode("UTF-8"), "$tsla")
+
+
+def test_compressed_response_refused_with_unsafe_decoder():
+    class UnreadResponse:
+        headers = {"Content-Encoding": "gzip"}
+
+        def iter_content(self, _chunk_size):
+            raise AssertionError("unsafe decoder must never be entered")
+
+    for version in ("2.3.0", "2.6.3", "2.7.0rc1", "unknown"):
+        with _patched_globals(_URLLIB3_VERSION=version), _check_raises(
+            ValueError,
+            "expected unsafe decoder version to be refused",
+            contains="urllib3 2.7.0 or newer",
+        ):
+            _read_response_body(UnreadResponse(), 1024)
+
+    for encoding in ("br", "zstd", "gzip, deflate"):
+        response = UnreadResponse()
+        response.headers = {"Content-Encoding": encoding}
+        with _check_raises(ValueError, "expected unsupported decoder to be refused"):
+            _read_response_body(response, 1024)
+
+
+def test_real_gzip_response_allocation_is_bounded():
+    import gzip
+    import tracemalloc
+
+    def response_for(encoded: bytes) -> requests.Response:
+        response = requests.Response()
+        response.status_code = 200
+        response.headers["Content-Encoding"] = "gzip"
+        response.raw = _Urllib3Response(
+            body=io.BytesIO(encoded),
+            headers=response.headers,
+            preload_content=False,
+        )
+        return response
+
+    # Check real successful decoding on the pinned dependency, while keeping
+    # self-tests runnable in an old environment that now safely refuses it.
+    normal = response_for(gzip.compress(b"bounded decoded content"))
+    try:
+        if _urllib3_has_bounded_decoding():
+            _check_equal(_read_response_body(normal, 1024), b"bounded decoded content")
+        else:
+            with _check_raises(ValueError, "expected old decoder to fail closed"):
+                _read_response_body(normal, 1024)
+    finally:
+        normal.close()
+
+    encoded = gzip.compress(b"A" * (32 * 1024 * 1024))
+    response = response_for(encoded)
+    # Start tracing after fixture creation. The old decoder allocated the
+    # entire 32 MiB expansion before the 4 MB application limit could reject it.
+    tracemalloc.start()
+    try:
+        with _check_raises(ValueError, "expected expanded body to exceed the cap"):
+            _read_response_body(response, MAX_EMBED_HTML_BYTES)
+        peak = tracemalloc.get_traced_memory()[1]
+        _check(peak < 16 * 1024 * 1024, f"decoder exceeded allocation budget: {peak}")
+    finally:
+        tracemalloc.stop()
+        response.close()
+
+
+def test_real_redirect_bodies_stay_unread():
+    class CountingBody(io.BytesIO):
+        bytes_read = 0
+
+        def read(self, *args):
+            data = super().read(*args)
+            self.bytes_read += len(data)
+            return data
+
+    original_factory = _new_session
+    for operation in ("external", "api"):
+        redirect_body = CountingBody(b"x" * (8 * 1024 * 1024))
+        calls = []
+
+        class OfflineAdapter(HTTPAdapter):
+            def send(self, request, **kwargs):
+                calls.append(request.url)
+                response = requests.Response()
+                response.url = request.url
+                response.request = request
+                response.status_code = 302 if len(calls) == 1 else 200
+                if response.status_code == 302:
+                    response.headers["Location"] = "/next"
+                    response.headers["Content-Length"] = str(8 * 1024 * 1024)
+                    body = redirect_body
+                else:
+                    body = io.BytesIO(b"ok")
+                response.raw = _Urllib3Response(
+                    body=body, headers=response.headers, preload_content=False
+                )
+                return response
+
+        def offline_session():
+            session = original_factory()
+            session.mount("http://", OfflineAdapter())
+            return session
+
+        def offline_addresses(url):
+            return _parse_url(url, schemes=("http",)), ["8.8.8.8"]
+
+        # The real Requests Session and urllib3 Response run against an adapter
+        # that only returns in-memory bodies. No DNS or socket calls are made.
+        with _patched_globals(
+            _new_session=offline_session,
+            _public_url_addresses=offline_addresses,
+        ):
+            if operation == "external":
+                body, final_url, _ = _safe_download("http://example.test/", 2)
+                _check_equal(body, b"ok")
+                _check_equal(final_url, "http://example.test/next")
+                _check_equal(len(calls), 2)
+            else:
+                with _check_raises(ValueError, "expected API redirect to be refused"):
+                    with _open_api_response(
+                        "GET", "http://example.test/xrpc/test",
+                        timeout=10, operation="testing an offline redirect",
+                    ) as response:
+                        _reject_redirect(response, "test API")
+                _check_equal(len(calls), 1)
+        _check_equal(redirect_body.bytes_read, 0)
+        _check(redirect_body.closed, "unread redirect body was not closed")
 
 
 def run_self_tests() -> None:
