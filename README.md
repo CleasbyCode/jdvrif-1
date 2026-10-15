@@ -1,6 +1,6 @@
 # jdvrif
 
-***jdvrif*** (*JPG Data Vehicle*, **v9.0**) is a fast, easy-to-use steganography command-line tool for concealing and extracting any file type via a **JPG** image. ***Linux only***.
+***jdvrif*** (*JPG Data Vehicle*) is a fast, easy-to-use steganography command-line tool for concealing and extracting any file type via a **JPG** image. ***Linux only***.
 
 Your data file is compressed with ***libdeflate/zlib***, then encrypted with ***XChaCha20-Poly1305*** (***libsodium*** secretstream) under a key derived by ***Argon2id*** from a randomly generated ***recovery PIN***, and finally embedded in the cover image. The PIN is displayed once, at the end of ***conceal***, and is never stored anywhere: without it the concealed file cannot be recovered.
 
@@ -12,8 +12,8 @@ An experimental ***Rust*** port [***jdvrif-rs***](https://github.com/CleasbyCode
 
 ***jdvrif*** partly derives from the ***[technique implemented](https://www.vice.com/en/article/bj4wxm/tiny-picture-twitter-complete-works-of-shakespeare-steganography)*** by security researcher ***[David Buchanan](https://www.da.vidbuchanan.co.uk/).***
 
-![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_323291.jpg)  
-*Demo Image: **"A place of concealment"** / ***PIN: 2190398302048725932****
+![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_043b7c551.jpg)  
+*Demo Image: **"A place of concealment"** / ***PIN: 7912872750612437051****
 
 ## How jdvrif conceals data
 
