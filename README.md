@@ -1,8 +1,13 @@
 # jdvrif
 
-***jdvrif*** (*JPG Data Vehicle*) is a fast, easy-to-use steganography command-line tool for concealing and extracting any file type via a **JPG** image. ***Linux only***.
+***jdvrif*** is a steganography command-line tool for concealing and extracting any file type via a **JPG** image.
 
-Your data file is compressed with ***libdeflate/zlib***, then encrypted with ***XChaCha20-Poly1305*** (***libsodium*** secretstream) under a key derived by ***Argon2id*** from a randomly generated ***128-bit recovery KEY***, and finally embedded in the cover image. The KEY is displayed once, at the end of ***conceal***, as 24 letters and digits in groups of four (*XXXX-XXXX-XXXX-XXXX-XXXX-XXXX*), and is never stored anywhere: without it the concealed file cannot be recovered. Its last two characters are a check, so most typing mistakes are reported straight away.
+![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_fd123e565.jpg)  
+***Demo Image -*** ***KEY: Wtub-TzgD-VCvf-aLHW-UwY2-UBoF***
+
+Your data file is compressed with ***libdeflate/zlib***, then encrypted with ***XChaCha20-Poly1305 (libsodium secretstream)*** under a ***256-bit encryption key derived by Argon2id*** from a randomly generated ***128-bit recovery KEY***, and finally embedded in the cover image.  
+
+The KEY is displayed once, at the end of conceal, printed as 24 Base58 characters (*letters and digits*) in six groups of four (*XXXX-XXXX-XXXX-XXXX-XXXX-XXXX*) and is not saved by the program. Without it, the concealed file cannot be recovered. Its last two characters form a checksum, so most typing mistakes are reported straight away.
 
 Images created before ***jdvrif v10*** used a numeric ***recovery PIN*** instead. They remain recoverable with that PIN: ***recover*** detects the image's version where it can and prompts for a ***KEY*** or ***PIN*** to match (*see [Usage](#usage)*).
 
@@ -14,17 +19,14 @@ An experimental ***Rust*** port [***jdvrif-rs***](https://github.com/CleasbyCode
 
 ***jdvrif*** partly derives from the ***[technique implemented](https://www.vice.com/en/article/bj4wxm/tiny-picture-twitter-complete-works-of-shakespeare-steganography)*** by security researcher ***[David Buchanan](https://www.da.vidbuchanan.co.uk/).***
 
-![Demo Image](https://github.com/CleasbyCode/jdvrif/blob/main/demo_image/jrif_fd123e565.jpg)  
-***Demo Image -*** ***KEY: Wtub-TzgD-VCvf-aLHW-UwY2-UBoF***
-
 ## How jdvrif conceals data
 
 Unlike the common [***LSB***](https://ctf101.org/forensics/what-is-stegonagraphy/) (*Least Significant Bit*) steganography method of concealing data within the pixels of a cover image, ***jdvrif*** mostly hides data within ***application segments*** of a ***JPG*** image (ICC, EXIF, XMP, etc).
 
-| Conceal mode | Where the data goes | Share the output image on |
-| --- | --- | --- |
-| *(no option)* | APP2/ICC profile segments | X-Twitter, Tumblr, Mastodon, Pixelfed, PostImage, ImgBB, ImgPile, Flickr |
-| ***-b*** | framed EXIF / Photoshop / XMP segments | ***Bluesky*** only |
+| Conceal&nbsp;Mode | Storage Method | Compatible Platforms |
+| :---: | :---: | :---: |
+| *(no option)* | APP2/ICC profile segments | X-Twitter, Tumblr, Mastodon,<br>Pixelfed, PostImage, ImgBB,<br>ImgPile, Flickr |
+| ***-b*** | Framed EXIF / Photoshop / XMP segments | ***Bluesky*** only |
 | ***-r*** | JPEG DCT coefficients (***QIM***) | ***Reddit*** only |
 | ***-x*** | JPEG DCT coefficients (***J-UNIWARD/STC***) | ***X-Twitter*** only |
 
